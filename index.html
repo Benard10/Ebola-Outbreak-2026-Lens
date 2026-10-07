@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>2026 Ebola Outbreak — Analytical Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="shortcut icon" type="image/jpeg" href="data/ebola_logo.jpg?v=1.2">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  :root {
+    --teal: #54b7a6;
+    --red: #e4605e;
+    --yellow: #e9c46a;
+    --blue: #4a90e2;
+    --map-high: #ef4444;
+    --map-moderate: #f59e0b;
+    --map-low: #38bdf8;
+    --map-none: #4b5563;
+    --bg-dark: #1e2326;
+    --panel-bg: #2a3135;
+    --text-main: #e0e6ed;
+    --text-muted: #8493a5;
+    --border: #364146;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-dark); font-family: var(--sans); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; width: 100%; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 60px; background: var(--panel-bg);
+    border-bottom: 1px solid var(--border); flex-shrink: 0; width: 100%;
+  }
+  .header-left h1 { font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .header-left h1 span { color: var(--teal); }
+  
+  .header-right { display: flex; gap: 24px; align-items: center; }
+  .stat-chip { text-align: right; border-left: 1px solid var(--border); padding-left: 20px; }
+  .stat-chip .val { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+  .stat-chip .lbl { font-size: 9px; text-transform: uppercase; color: var(--text-muted); }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 2.8fr 1fr 1fr;
+    grid-template-rows: 0.8fr 1fr 1fr;
+    gap: 16px; padding: 16px; flex: 1; overflow: hidden; height: 100%; width: 100%;
+  }
+
+  .panel { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; position: relative; min-height: 0; min-width: 0; }
+  .panel-header { padding: 10px 16px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.1); display: flex; justify-content: space-between; }
+  .trend-controls { display: flex; align-items: center; gap: 10px; }
+  .trend-controls select { background: #20272b; border: 1px solid var(--border); color: var(--text-main); border-radius: 3px; padding: 2px 5px; font: 9px var(--mono); text-transform: none; }
+  .panel-body { flex: 1; padding: 12px; position: relative; min-height: 0; }
+  .empty-state { position: absolute; inset: 12px; display: grid; place-items: center; text-align: center; color: var(--text-muted); font: 10px/1.5 var(--mono); }
+
+  .map-panel { grid-column: 1; grid-row: 1 / 4; min-height: 0; }
+  .map-panel > #map { width: 100%; height: 100%; z-index: 1; background: #1e2326; display: block; }
+  .map-panel:fullscreen, .map-panel:-webkit-full-screen { width: 100vw; height: 100vh; border: 0; border-radius: 0; background: var(--bg-dark); }
+
+  .maplibregl-map :focus { outline: none !important; }
+
+  .map-legend {
+    position: absolute; bottom: 20px; left: 20px;
+    background: rgba(42, 49, 53, 0.92); border: 1px solid var(--border);
+    border-radius: 5px; padding: 12px 13px; z-index: 1000;
+    backdrop-filter: blur(4px); pointer-events: none;
+  }
+  .legend-title { font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px; font-weight: 700; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 12px; line-height: 1.3; font-weight: 500; color: var(--text-main); }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-color { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; }
+  .legend-color.boundary { border-radius: 2px; border: 1px solid rgba(255,255,255,0.35); }
+
+  .map-mode-toggle {
+    position: absolute; top: 12px; left: 12px; z-index: 1001;
+    display: flex; gap: 4px; background: rgba(42, 49, 53, 0.92);
+    border: 1px solid var(--border); border-radius: 4px; padding: 4px;
+    flex-wrap: wrap; max-width: calc(100% - 72px);
+  }
+  .map-mode-toggle button {
+    background: transparent; border: 0; color: var(--text-muted);
+    font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+    padding: 7px 9px; border-radius: 3px; cursor: pointer;
+  }
+  .map-mode-toggle button.active { background: var(--teal); color: #10201d; }
+  .map-mode-toggle button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .map-mode-toggle select {
+    background: #20272b; border: 1px solid var(--border); color: var(--text-main);
+    font-family: var(--mono); font-size: 10px; border-radius: 3px; padding: 6px;
+  }
+  .map-mode-toggle select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .maplibregl-ctrl-group { background: rgba(42, 49, 53, 0.92) !important; border: 1px solid var(--border); box-shadow: none !important; }
+  .maplibregl-ctrl-group button + button { border-top-color: var(--border); }
+  .maplibregl-ctrl button .maplibregl-ctrl-icon { filter: invert(1); }
+  .maplibregl-ctrl-attrib.maplibregl-compact {
+    min-height: 24px; min-width: 24px; border-radius: 4px;
+    background: rgba(42, 49, 53, 0.92) !important; color: var(--text-muted);
+  }
+  .maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button { width: 24px; height: 24px; }
+  .maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-inner { display: none !important; }
+  .maplibregl-ctrl-attrib.maplibregl-compact:hover .maplibregl-ctrl-attrib-inner,
+  .maplibregl-ctrl-attrib.maplibregl-compact:focus-within .maplibregl-ctrl-attrib-inner {
+    display: block !important;
+    max-width: min(420px, calc(100vw - 80px)); padding: 3px 28px 3px 7px;
+    font-size: 9px; line-height: 14px; color: var(--text-main);
+  }
+  .maplibregl-ctrl-attrib a { color: var(--teal); }
+
+  #info-panel {
+    position: absolute; top: 0; right: 0; width: 320px; height: 100%;
+    background: var(--panel-bg); border: 1px solid var(--border);
+    border-radius: 0 8px 8px 0; z-index: 1000; padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    display: none; animation: slideIn 0.3s ease-out; overflow-y: auto;
+  }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  #info-panel h2 { font-size: 16px; color: var(--teal); margin-bottom: 15px; text-transform: uppercase; }
+  .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
+  .info-label { color: var(--text-muted); text-transform: uppercase; font-size: 10px; }
+  .close-btn { position: absolute; top: 10px; right: 10px; cursor: pointer; color: var(--text-muted); font-size: 18px; }
+  .info-list { margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; }
+  .info-list-title { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .info-zone { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.05); border-radius: 4px; padding: 8px; margin-bottom: 8px; }
+  .info-zone-name { font-size: 12px; font-weight: 600; color: var(--text-main); margin-bottom: 4px; }
+  .info-zone-meta { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+
+  .metrics-panel { grid-column: 2; grid-row: 1; }
+  .doughnut-panel { grid-column: 3; grid-row: 1; }
+  .doughnut-panel .panel-body { padding: 4px 6px; }
+  .bar-panel { grid-column: 2 / 4; grid-row: 2; }
+  .trend-panel { grid-column: 2 / 4; grid-row: 3; }
+
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 100%; }
+  .risk-card { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+  .risk-card .value { font-family: var(--mono); font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+  .risk-card .label { font-size: 9px; text-transform: uppercase; color: var(--text-muted); }
+  .risk-card.high .value { color: var(--red); }
+  .risk-card.good .value { color: var(--teal); }
+
+  .update-bar { background: var(--panel-bg); border-top: 1px solid var(--border); padding: 7px 24px; font-family: var(--mono); font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .refresh-controls { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .last-sync { color: var(--text-muted); }
+  .status-badges { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+  .status-badge { border: 1px solid var(--border); border-radius: 999px; padding: 4px 7px; background: #20272b; white-space: nowrap; }
+  .status-badge.live { border-color: rgba(84,183,166,0.65); color: var(--teal); }
+  .status-badge.cached { border-color: rgba(233,196,106,0.65); color: var(--yellow); }
+  .status-badge.error { border-color: rgba(228,96,94,0.7); color: var(--red); }
+  .refresh-btn {
+    border: 1px solid var(--border); border-radius: 4px; background: #20272b;
+    color: var(--text-main); padding: 5px 8px; font: 600 9px/1 var(--mono);
+    text-transform: uppercase; cursor: pointer;
+  }
+  .refresh-btn:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+  .refresh-btn.active { border-color: var(--teal); background: rgba(84,183,166,0.12); color: var(--teal); }
+  .refresh-btn:disabled { cursor: wait; opacity: 0.55; }
+  @media (max-width: 760px) {
+    .update-bar { padding: 7px 12px; align-items: flex-start; }
+    .status-badges, .refresh-controls { width: 100%; }
+    .refresh-controls { justify-content: flex-end; }
+    .last-sync { margin-right: auto; }
+  }
+
+  .zone-label {
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    color: #fff !important; font-family: var(--mono) !important; font-size: 9px;
+    text-shadow: 1px 1px 2px #000; pointer-events: none;
+    transition: none !important;
+  }
+  .maplibregl-popup-content { background: var(--panel-bg); color: var(--text-main); border: 1px solid var(--border); font-family: var(--mono); font-size: 10px; padding: 7px 9px; }
+  .maplibregl-popup-tip { border-top-color: var(--panel-bg) !important; border-bottom-color: var(--panel-bg) !important; }
+  .case-hover-popup { pointer-events: none; }
+  .case-hover-popup .maplibregl-popup-content {
+    min-width: 190px; padding: 10px 11px; border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.42);
+  }
+  .hover-title { color: #fff; font-family: var(--sans); font-size: 12px; font-weight: 700; line-height: 1.3; }
+  .hover-context { color: var(--text-muted); font-size: 9px; margin: 2px 0 8px; text-transform: uppercase; letter-spacing: 0.45px; }
+  .hover-stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 7px; }
+  .hover-stats span:nth-child(odd) { color: var(--text-muted); }
+  .hover-stats span:nth-child(even) { color: #fff; font-weight: 600; text-align: right; }
+  .hover-hint { color: var(--teal); font-size: 8px; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Ebola Outbreak 2026 | <span>Biological Surveillance</span></h1>
+  </div>
+  <div class="header-right">
+    <div class="stat-chip"><div class="val" id="hdr-confirmed" style="color:var(--teal)">0</div><div class="lbl">Confirmed</div></div>
+    <div class="stat-chip"><div class="val" id="hdr-suspected" style="color:var(--yellow)">0</div><div class="lbl">Suspected</div></div>
+    <div class="stat-chip"><div class="val" id="hdr-deaths" style="color:var(--red)">0</div><div class="lbl">Total Deaths</div></div>
+    <div class="stat-chip"><div class="val" id="hdr-recovered" style="color:var(--blue)">0</div><div class="lbl">Recovered</div></div>
+  </div>
+</header>
+
+<div class="dashboard-grid">
+  <div class="panel map-panel">
+    <div id="map"></div>
+    <div class="map-mode-toggle" aria-label="Map mode">
+      <button type="button" data-map-mode="choropleth" class="active">Choropleth</button>
+      <button type="button" data-map-mode="points">Points</button>
+      <select id="adminLevel" aria-label="Administrative boundary level">
+        <option value="auto">ADM Auto</option>
+        <option value="0">ADM0</option>
+        <option value="1">ADM1</option>
+        <option value="2">ADM2</option>
+        <option value="3">ADM3</option>
+        <option value="4">ADM4</option>
+      </select>
+      <select id="mapMetric" aria-label="Map metric">
+        <option value="total">Total cases</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="deaths">Deaths</option>
+        <option value="recovered">Recovered</option>
+        <option value="per100k" disabled>Per 100k — population needed</option>
+      </select>
+      <select id="countryFilter" aria-label="Filter dashboard by country"><option value="">All countries</option></select>
+      <select id="provinceFilter" aria-label="Filter dashboard by province" disabled><option value="">All provinces</option></select>
+      <button type="button" disabled title="Requires historical province or health-zone snapshots">Playback unavailable</button>
+    </div>
+    <div class="map-legend">
+      <div class="legend-title" id="mapLegendTitle">Total Case Intensity</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--map-high)"></div> <span id="legendHigh">High caseload (50+)</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--map-moderate)"></div> <span id="legendModerate">Moderate caseload (15–49)</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--map-low)"></div> <span id="legendLow">Lower caseload (1–14)</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--map-none)"></div> No cases reported</div>
+    </div>
+    <div id="info-panel">
+      <div class="close-btn" onclick="document.getElementById('info-panel').style.display='none'">&times;</div>
+      <h2 id="info-title">Boundary</h2>
+      <div class="info-row"><span class="info-label">Province</span><span id="info-province">---</span></div>
+      <div class="info-row"><span class="info-label">Total Cases</span><span id="info-total">0</span></div>
+      <div class="info-row"><span class="info-label">Confirmed</span><span id="info-conf" style="color:var(--teal)">0</span></div>
+      <div class="info-row"><span class="info-label">Suspected</span><span id="info-susp" style="color:var(--yellow)">0</span></div>
+      <div class="info-row"><span class="info-label">Deaths</span><span id="info-death" style="color:var(--red)">0</span></div>
+      <div class="info-row"><span class="info-label">Recovered</span><span id="info-rec" style="color:var(--blue)">0</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span id="info-status">ACTIVE</span></div>
+      <div class="info-list">
+        <div class="info-list-title"></div>
+        <div id="info-zones"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel metrics-panel">
+    <div class="panel-header">Risk Analysis</div>
+    <div class="panel-body">
+      <div class="risk-grid">
+        <div class="risk-card high"><div class="value" id="risk-cfr">0%</div><div class="label">Confirmed CFR</div></div>
+        <div class="risk-card good"><div class="value" id="risk-recovery">0%</div><div class="label">Recovery Rate</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel trend-panel">
+    <div class="panel-header">
+      <span>Daily Reports &amp; Growth Curve</span>
+      <div class="trend-controls">
+        <select id="trendWindow" aria-label="Growth curve date range">
+          <option value="14">Recent 14 reports</option>
+          <option value="30">Recent 30 reports</option>
+          <option value="all">All history</option>
+        </select>
+        <span id="trendRange">Awaiting history</span>
+      </div>
+    </div>
+    <div class="panel-body"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <div class="panel bar-panel">
+    <div class="panel-header">
+      <span id="geoTitle">Geographic Impact — Countries</span>
+      <div class="trend-controls">
+        <select id="geoLimit" aria-label="Number of geographic entries">
+          <option value="all">All entries</option>
+          <option value="10">Top 10</option>
+          <option value="5">Top 5</option>
+        </select>
+      </div>
+    </div>
+    <div class="panel-body"><canvas id="barChart"></canvas><div id="geoEmpty" class="empty-state" hidden></div></div>
+  </div>
+
+  <div class="panel doughnut-panel">
+    <div class="panel-header">Caseload Breakdown</div>
+    <div class="panel-body"><canvas id="doughnutChart"></canvas></div>
+  </div>
+</div>
+
+<div class="update-bar">
+  <div class="status-badges" aria-live="polite">
+    <span class="status-badge" id="dataSource">Source: Cases sheet</span>
+    <span class="status-badge" id="dataAsOfBadge">Data as of: —</span>
+    <span class="status-badge" id="dataModeBadge">Loading</span>
+  </div>
+  <div class="refresh-controls">
+    <span class="last-sync" id="lastSync">Checking…</span>
+    <button type="button" id="refreshNow" class="refresh-btn">Refresh now</button>
+    <button type="button" id="autoRefresh" class="refresh-btn active" aria-pressed="true">Auto: 30s</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
+<script src="app-config.js"></script>
+<script>
+  const APP_CONFIG = window.EBOLA_APP_CONFIG || {};
+  const API_BASE = APP_CONFIG.apiBase || "";
+  let map = null;
+  let mapReadyPromise = null;
+  let adminBoundaryCache = {};
+  let boundaryManifest = null;
+  let countryNameIndex = new Map();
+  let currentDashboardData = null;
+  let boundaryRequestId = 0;
+  let renderedAdminLevel = -1;
+  let renderedCountryCodes = new Set();
+  let pendingCountryBoundaries = new Map();
+  let mapExtentBounds = null;
+  let chartInstances = {};
+  let mapMode = "choropleth";
+  let hasInitialFit = false;
+  let dataLoadInProgress = false;
+  let pendingForceRefresh = false;
+  let mapRenderInProgress = false;
+  let pendingMapData = null;
+  let autoRefreshEnabled = true;
+  let autoRefreshTimer = null;
+  let AUTO_REFRESH_MS = Number(APP_CONFIG.autoRefreshMs) || 30000;
+  const HISTORY_REFRESH_MS = Number(APP_CONFIG.historyRefreshMs) || 300000;
+  const DASHBOARD_STORAGE_KEY = APP_CONFIG.dashboardStorageKey || "ebola-dashboard-last-data-v2";
+  const REFRESH_SIGNAL_KEY = APP_CONFIG.refreshSignalKey || "ebola-dashboard-refresh-request";
+  let runtimeSources = {
+    ...(APP_CONFIG.sources || {}),
+    dailyHistory: { ...(APP_CONFIG.sources?.dailyHistory || {}) },
+    subnational: { ...(APP_CONFIG.sources?.subnational || {}) }
+  };
+  let cachedDashboardMeta = null;
+  let dailyHistoryPromise = null;
+  let dailyHistoryLoadedAt = 0;
+  let subnationalPromise = null;
+  let subnationalLoadedAt = 0;
+  let hoverPopup = null;
+  let hoverFeatureKey = "";
+  const colors = { teal: '#54b7a6', red: '#e4605e', yellow: '#e9c46a', blue: '#4a90e2', grid: '#364146', text: '#8493a5' };
+  const mapColors = { high: '#ef4444', moderate: '#f59e0b', low: '#38bdf8', none: '#4b5563' };
+  const MAP_THRESHOLDS = APP_CONFIG.mapThresholds || {
+    total: { moderate: 15, high: 50 }, confirmed: { moderate: 15, high: 50 },
+    deaths: { moderate: 5, high: 15 }, recovered: { moderate: 10, high: 30 }
+  };
+  const MAP_METRICS = {
+    total: { field: 'caseTotal', label: 'Total cases' },
+    confirmed: { field: 'confirmed', label: 'Confirmed cases' },
+    deaths: { field: 'deaths', label: 'Deaths' },
+    recovered: { field: 'recovered', label: 'Recovered' }
+  };
+
+  if (window.Chart) {
+    Chart.defaults.color = colors.text;
+    Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
+    Chart.Tooltip.positioners.growthLine = function(items, eventPosition) {
+      const lineAnchor = items.find(item => item.datasetIndex === 1 && item.element);
+      return lineAnchor
+        ? { x: lineAnchor.element.x, y: lineAnchor.element.y }
+        : eventPosition;
+    };
+  }
+
+  function getRiskColor(val) {
+    const metric = document.getElementById("mapMetric")?.value || "total";
+    const thresholds = MAP_THRESHOLDS[metric] || MAP_THRESHOLDS.total;
+    if (val <= 0) return mapColors.none;
+    if (val >= thresholds.high) return mapColors.high;
+    if (val >= thresholds.moderate) return mapColors.moderate;
+    return mapColors.low;
+  }
+
+  function activeMapMetric() {
+    const key = document.getElementById("mapMetric")?.value || "total";
+    return { key, ...(MAP_METRICS[key] || MAP_METRICS.total), thresholds: MAP_THRESHOLDS[key] || MAP_THRESHOLDS.total };
+  }
+
+  function mapMetricValue(item, metric = activeMapMetric()) {
+    return metric.field === "caseTotal" ? reportedCases(item) : getStat(item || {}, metric.field);
+  }
+
+  function metricRadiusExpression(metric = activeMapMetric()) {
+    return ["interpolate", ["linear"], ["to-number", ["get", metric.field], 0],
+      0, 10, metric.thresholds.moderate, 18, metric.thresholds.high, 28
+    ];
+  }
+
+  function updateMapLegend() {
+    const metric = activeMapMetric();
+    const lowMax = Math.max(1, metric.thresholds.moderate - 1);
+    document.getElementById("mapLegendTitle").textContent = `${metric.label} intensity`;
+    document.getElementById("legendHigh").textContent = `High (${metric.thresholds.high}+)`;
+    document.getElementById("legendModerate").textContent = `Moderate (${metric.thresholds.moderate}–${metric.thresholds.high - 1})`;
+    document.getElementById("legendLow").textContent = `Lower (1–${lowMax})`;
+  }
+
+  function normalizeBoundaryName(name) {
+    return String(name || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+
+  function normalizeCountryName(name) {
+    const value = normalizeBoundaryName(name);
+    if (
+      value === "drc" ||
+      value === "dr congo" ||
+      value === "congo drc" ||
+      value === "d r congo" ||
+      value === "congo democratic republic" ||
+      value === "democratic republic of the congo" ||
+      value === "democraticrepublicofthecongo"
+    ) {
+      return "democratic republic of the congo";
+    }
+    if (value === "southsudan") return "south sudan";
+    if (value === "republicofthecongo") return "republic of the congo";
+    return value;
+  }
+
+  function buildCountryNameIndex(manifest) {
+    countryNameIndex = new Map();
+    Object.entries(manifest.countries || {}).forEach(([iso3, country]) => {
+      [iso3, country.name, ...(country.aliases || [])].forEach(name => {
+        const key = normalizeCountryName(name);
+        if (key) countryNameIndex.set(key, iso3);
+      });
+    });
+    const aliases = {
+      "drc": "COD", "dr congo": "COD", "congo kinshasa": "COD",
+      "democratic republic of congo": "COD", "the democratic republic of the congo": "COD",
+      "republic of congo": "COG", "congo brazzaville": "COG",
+      "cote d ivoire": "CIV", "ivory coast": "CIV",
+      "tanzania united republic of": "TZA", "united republic of tanzania": "TZA",
+      "bolivia plurinational state of": "BOL", "venezuela bolivarian republic of": "VEN",
+      "iran islamic republic of": "IRN", "lao people s democratic republic": "LAO",
+      "syrian arab republic": "SYR", "viet nam": "VNM", "south korea": "KOR",
+      "north korea": "PRK", "russia": "RUS", "moldova": "MDA",
+      "brunei": "BRN", "cape verde": "CPV", "eswatini": "SWZ"
+    };
+    Object.entries(aliases).forEach(([name, iso3]) => countryNameIndex.set(name, iso3));
+  }
+
+  function resolveCountryIso(value) {
+    const direct = String(value || "").toUpperCase();
+    if (/^[A-Z]{3}$/.test(direct) && boundaryManifest?.countries?.[direct]) return direct;
+    return countryNameIndex.get(normalizeCountryName(value)) || "";
+  }
+
+  function isValidCoordinate(lat, lon) {
+    if (Number.isNaN(lat) || Number.isNaN(lon)) return false;
+    if (lat === 0 && lon === 0) return false;
+    return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+  }
+
+  class FullExtentControl {
+    onAdd(targetMap) {
+      this.map = targetMap;
+      this.container = document.createElement("div");
+      this.container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.title = "Zoom to full outbreak extent";
+      button.setAttribute("aria-label", button.title);
+      button.innerHTML = '<span aria-hidden="true" style="font:700 17px/1 sans-serif;color:#fff">⌗</span>';
+      button.addEventListener("click", () => fitOutbreakExtent());
+      this.container.appendChild(button);
+      return this.container;
+    }
+    onRemove() {
+      this.container.remove();
+      this.map = null;
+    }
+  }
+
+  function fitOutbreakExtent(duration = 700) {
+    if (map && mapExtentBounds && !mapExtentBounds.isEmpty()) {
+      map.fitBounds(mapExtentBounds, { padding: 55, maxZoom: 7, duration });
+    }
+  }
+
+  async function ensureMap() {
+    if (!window.maplibregl) return false;
+    if (mapReadyPromise) return mapReadyPromise;
+    try {
+      map = new maplibregl.Map({
+        container: "map",
+        center: [25.0, 0.0],
+        zoom: 4,
+        attributionControl: false,
+        style: runtimeSources.mapStyle
+      });
+      window.__mapErrors = [];
+      map.on("error", event => {
+        const message = String(event?.error?.message || event?.error || event || "Unknown MapLibre error");
+        window.__mapErrors.push(message);
+        console.error("MapLibre error:", message);
+      });
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      map.addControl(new maplibregl.FullscreenControl({ container: document.querySelector(".map-panel") }), "top-right");
+      map.addControl(new FullExtentControl(), "top-right");
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+      mapReadyPromise = new Promise(resolve => {
+        map.once("load", () => {
+          map.on("zoomend", () => {
+            const selector = document.getElementById("adminLevel");
+            if (selector && selector.value === "auto" && currentDashboardData) renderAdminDetailLayer(getFilteredDashboardData(currentDashboardData));
+          });
+          resolve(true);
+        });
+      });
+      return mapReadyPromise;
+    } catch (err) {
+      console.error("Map initialization failed:", err);
+      return false;
+    }
+  }
+
+  function getStat(item, field) {
+    const mappings = { confirmed: ['confirmed', 'conf'], suspected: ['suspected', 'susp'], deaths: ['deaths'], recovered: ['recovered'] };
+    if (mappings[field]) {
+      for (let alias of mappings[field]) {
+        if (item[alias] !== undefined) return Number(item[alias]) || 0;
+      }
+    }
+    return Number(item[field]) || 0;
+  }
+
+  function showInfoPanel(item) {
+    const panel = document.getElementById('info-panel');
+    const isBoundary = item.isBoundary === true;
+    document.getElementById('info-title').innerText = item.name || "Unknown Zone";
+    document.getElementById('info-province').innerText = item.province || item.country_name || item.Province || item.COUNTRY || '---';
+    const confirmed = getStat(item, 'confirmed');
+    const suspected = getStat(item, 'suspected');
+    const deaths = getStat(item, 'deaths');
+    const recovered = getStat(item, 'recovered');
+    const total = Number(item.caseTotal) || (confirmed + suspected);
+    document.getElementById('info-total').innerText = total.toLocaleString();
+    document.getElementById('info-conf').innerText = confirmed.toLocaleString();
+    document.getElementById('info-susp').innerText = suspected.toLocaleString();
+    document.getElementById('info-death').innerText = deaths.toLocaleString();
+    document.getElementById('info-rec').innerText = recovered.toLocaleString();
+    document.getElementById('info-status').innerText = item.status || 'NO CASES REPORTED';
+    const zonesContainer = document.getElementById('info-zones');
+    const zones = Array.isArray(item.zones) ? item.zones : (item.name ? [item] : []);
+    const infoList = document.querySelector('.info-list');
+    const listTitle = document.querySelector('.info-list-title');
+    if (infoList) infoList.style.display = (zones.length > 0) ? 'block' : 'none';
+    if (listTitle && isBoundary) {
+      listTitle.innerText = zones.length > 0 ? `HEALTH ZONES (${zones.length})` : '';
+      listTitle.style.display = zones.length > 0 ? 'block' : 'none';
+    }
+    zonesContainer.innerHTML = zones.map(z => `
+      <div class="info-zone">
+        <div class="info-zone-name">${escapeHtml(z.name || "Unknown point")}</div>
+        <div class="info-zone-meta">${(getStat(z, 'confirmed') + getStat(z, 'suspected')).toLocaleString()} total | ${getStat(z, 'confirmed').toLocaleString()} confirmed | ${getStat(z, 'deaths').toLocaleString()} deaths</div>
+      </div>
+    `).join("");
+    panel.style.display = 'block';
+  }
+
+  function escapeHtml(value) {
+    return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function hoverPopupHtml(item, hint = "Click for full details") {
+    const confirmed = getStat(item, "confirmed");
+    const suspected = getStat(item, "suspected");
+    const probable = Number(item.probable) || 0;
+    const deaths = getStat(item, "deaths");
+    const recovered = getStat(item, "recovered");
+    const total = Number(item.caseTotal) || confirmed + suspected + probable;
+    const title = item.name || item.boundary_name || item.country_name || "Unknown location";
+    const contextParts = [];
+    const country = item.country_name || item.country || item.Country || "";
+    if (country && normalizeBoundaryName(country) !== normalizeBoundaryName(title)) contextParts.push(country);
+    if (item.province && normalizeBoundaryName(item.province) !== normalizeBoundaryName(title)) contextParts.push(item.province);
+    if (Number.isFinite(Number(item.admin_level))) contextParts.push(`ADM${Number(item.admin_level)}`);
+    if (item.point_count) contextParts.push(`${Number(item.point_count).toLocaleString()} mapped locations`);
+    const rows = [
+      ["Total cases", total],
+      ["Confirmed", confirmed],
+      ...(suspected > 0 ? [["Suspected", suspected]] : []),
+      ...(probable > 0 ? [["Probable", probable]] : []),
+      ["Deaths", deaths],
+      ["Recovered", recovered]
+    ];
+    return `
+      <div class="hover-title">${escapeHtml(title)}</div>
+      <div class="hover-context">${escapeHtml(contextParts.join(" · ") || item.status || "Reported area")}</div>
+      <div class="hover-stats">${rows.map(([label, value]) => `<span>${escapeHtml(label)}</span><span>${Number(value).toLocaleString()}</span>`).join("")}</div>
+      <div class="hover-hint">${escapeHtml(hint)}</div>
+    `;
+  }
+
+  function showHoverPopup(event, rawItem, hint) {
+    if (!map || !event?.lngLat) return;
+    const item = mapFeatureProperties(rawItem || {});
+    const nextKey = [item.boundary_id, item.name, item.country_name, item.caseTotal, item.point_count].join("|");
+    if (!hoverPopup) {
+      hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: "case-hover-popup", maxWidth: "270px" });
+    }
+    if (nextKey !== hoverFeatureKey) {
+      hoverPopup.setHTML(hoverPopupHtml(item, hint));
+      hoverFeatureKey = nextKey;
+    }
+    hoverPopup.setLngLat(event.lngLat);
+    if (!hoverPopup.isOpen()) hoverPopup.addTo(map);
+  }
+
+  function hideHoverPopup() {
+    if (hoverPopup) hoverPopup.remove();
+    hoverFeatureKey = "";
+  }
+
+  function riskColorExpression(fieldName) {
+    const metric = activeMapMetric();
+    const thresholds = metric.thresholds;
+    const value = ["to-number", ["get", fieldName], 0];
+    return ["case", ["<=", value, 0], mapColors.none, ["step", value, mapColors.low, thresholds.moderate, mapColors.moderate, thresholds.high, mapColors.high]];
+  }
+
+  async function fetchJsonWithRetry(url, attempts = 3) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const response = await fetch(url, { redirect: "follow", cache: attempt === 1 ? "default" : "reload" });
+        const body = await response.text();
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (/^\s*</.test(body)) throw new Error("Server returned HTML instead of JSON");
+        return JSON.parse(body);
+      } catch (error) {
+        lastError = error;
+        if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, 800 * attempt));
+      }
+    }
+    throw lastError;
+  }
+
+  function mapFeatureProperties(properties) {
+    const props = { ...(properties || {}) };
+    if (typeof props.zonesJson === "string") {
+      try { props.zones = JSON.parse(props.zonesJson); } catch (_) { props.zones = []; }
+    }
+    return props;
+  }
+
+  async function loadBoundaryManifest() {
+    if (boundaryManifest) return boundaryManifest;
+    const response = await fetch(runtimeSources.boundaryManifest);
+    if (!response.ok) throw new Error(`Boundary manifest returned ${response.status}`);
+    boundaryManifest = await response.json();
+    buildCountryNameIndex(boundaryManifest);
+    return boundaryManifest;
+  }
+
+  function compactBoundaryCollection(sourceData, iso3, level) {
+    const country = boundaryManifest?.countries?.[iso3];
+    return {
+      type: "FeatureCollection",
+      features: (sourceData.features || []).flatMap((feature, index) => {
+        const source = feature.properties || {};
+        const name = String(source.shapeName || source.name || source.NAME || source.NOM || country?.name || iso3).trim();
+        const boundaryId = `${iso3}-ADM${level}-${source.shapeID || source.shapeISO || index + 1}`;
+        const geometries = feature.geometry?.type === "MultiPolygon"
+          ? feature.geometry.coordinates.map(coordinates => ({ type: "Polygon", coordinates }))
+          : [feature.geometry];
+        const primaryPart = geometries.reduce((best, geometry, partIndex) => {
+          const area = Math.abs(ringArea(geometry?.coordinates?.[0] || []));
+          return area > best.area ? { area, partIndex } : best;
+        }, { area: -1, partIndex: 0 }).partIndex;
+        return geometries.filter(Boolean).map((geometry, partIndex) => ({
+          type: "Feature",
+          properties: {
+            boundary_id: `${boundaryId}-${partIndex + 1}`,
+            boundary_name: name,
+            boundary_key: normalizeBoundaryName(name),
+            country_iso: iso3,
+            country_name: country?.name || iso3,
+            admin_level: level,
+            label_primary: partIndex === primaryPart
+          },
+          geometry
+        }));
+      })
+    };
+  }
+
+  async function fetchAdminBoundary(iso3, level) {
+    const key = `${iso3}|${level}`;
+    if (adminBoundaryCache[key]) return adminBoundaryCache[key];
+    const manifest = await loadBoundaryManifest();
+    const metadata = manifest.countries?.[iso3]?.levels?.[`ADM${level}`];
+    if (!metadata) return null;
+    const sourceUrl = metadata.path ? `${metadata.path}?v=20261007` : String(metadata.url || "").replace(
+      /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/,
+      "https://media.githubusercontent.com/media/$1/$2/$3/$4"
+    );
+    if (!sourceUrl) return null;
+    const response = await fetch(sourceUrl);
+    if (!response.ok) return null;
+    const body = await response.text();
+    if (/^\s*</.test(body) || /^version https:\/\/git-lfs\.github\.com\/spec\//.test(body)) {
+      throw new Error(`Boundary source for ${iso3} ADM${level} did not return GeoJSON`);
+    }
+    const geojson = compactBoundaryCollection(JSON.parse(body), iso3, level);
+    adminBoundaryCache[key] = geojson;
+    return geojson;
+  }
+
+  function hydrateCountryCodes(data) {
+    if (!data.map) {
+      data.map = { points: data.zones || [], nationalStats: [], adminStats: [], snapshotDate: data.totals?.sourceDate || "" };
+    }
+    [data.map.nationalStats, data.map.adminStats, data.map.points, data.zones, data.boundaryStats]
+      .filter(Array.isArray)
+      .forEach(records => records.forEach(item => {
+        if (!item.countryIso) item.countryIso = resolveCountryIso(item.country || item.country_name || item.Country);
+      }));
+  }
+
+  function reportedCases(item) {
+    return Number(item?.caseTotal) || getStat(item || {}, "confirmed") + getStat(item || {}, "suspected") + Number(item?.probable || 0);
+  }
+
+  function getActiveCountryCodes(data) {
+    const records = [
+      ...(data.map?.nationalStats || []),
+      ...(data.map?.points || []),
+      ...(data.zones || []),
+      ...(data.boundaryStats || [])
+    ];
+    return Array.from(new Set(records
+      .filter(item => reportedCases(item) > 0)
+      .map(item => item.countryIso || resolveCountryIso(item.country || item.country_name))
+      .filter(Boolean)));
+  }
+
+  function selectedAdminLevel() {
+    const value = document.getElementById("adminLevel")?.value || "auto";
+    if (value !== "auto") return Number(value);
+    const zoom = map ? map.getZoom() : 4;
+    if (zoom < 4.5) return 0;
+    if (zoom < 6.5) return 1;
+    if (zoom < 8.5) return 2;
+    if (zoom < 10.5) return 3;
+    return 4;
+  }
+
+  function availableLevelForCountry(iso3, requestedLevel) {
+    const levels = boundaryManifest?.countries?.[iso3]?.levels || {};
+    for (let level = requestedLevel; level >= 0; level--) {
+      if (levels[`ADM${level}`]) return level;
+    }
+    return null;
+  }
+
+  async function loadCombinedBoundaries(countryCodes, requestedLevel) {
+    const collections = await Promise.all(countryCodes.map(async iso3 => {
+      const level = availableLevelForCountry(iso3, requestedLevel);
+      return level === null ? null : fetchAdminBoundary(iso3, level);
+    }));
+    return {
+      type: "FeatureCollection",
+      features: collections.flatMap(collection => collection?.features || [])
+    };
+  }
+
+  function enrichBoundaries(geojson, data, level) {
+    const national = new Map((data.map?.nationalStats || []).map(item => [item.countryIso, item]));
+    const admin = new Map((data.map?.adminStats || []).map(item => [`${item.countryIso}|${item.normalizedName}`, item]));
+    return {
+      type: "FeatureCollection",
+      features: (geojson.features || []).map(feature => {
+        const properties = feature.properties || {};
+        const stat = level === 0
+          ? national.get(properties.country_iso)
+          : admin.get(`${properties.country_iso}|${properties.boundary_key}`);
+        return {
+          ...feature,
+          properties: {
+            ...properties,
+            name: properties.boundary_name,
+            confirmed: Number(stat?.confirmed) || 0,
+            suspected: Number(stat?.suspected) || 0,
+            deaths: Number(stat?.deaths) || 0,
+            recovered: Number(stat?.recovered) || 0,
+            caseTotal: Number(stat?.caseTotal) || 0,
+            status: stat ? (stat.status || "ACTIVE") : "NO GRANULAR DATA",
+            lastUpdated: stat?.lastUpdated || data.map?.snapshotDate || "",
+            isBoundary: true
+          }
+        };
+      })
+    };
+  }
+
+  function caseloadColorExpression(maxValue) {
+    const max = Math.max(1, Number(maxValue) || 1);
+    return ["interpolate", ["linear"], ["to-number", ["get", "caseTotal"], 0],
+      0, "#1e2326", Math.max(1, max * 0.03), mapColors.low, Math.max(2, max * 0.3), mapColors.moderate, max, mapColors.high
+    ];
+  }
+
+  function geojsonMax(geojson) {
+    return Math.max(1, ...(geojson.features || []).map(feature => Number(feature.properties?.caseTotal) || 0));
+  }
+
+  function extendMapExtent(geojson) {
+    if (!mapExtentBounds) mapExtentBounds = new maplibregl.LngLatBounds();
+    const collect = value => {
+      if (!Array.isArray(value)) return;
+      if (typeof value[0] === "number" && typeof value[1] === "number") mapExtentBounds.extend(value);
+      else value.forEach(collect);
+    };
+    (geojson.features || []).forEach(feature => collect(feature.geometry?.coordinates));
+  }
+
+  function ringArea(ring) {
+    let area = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      area += (ring[j][0] * ring[i][1]) - (ring[i][0] * ring[j][1]);
+    }
+    return area / 2;
+  }
+
+  function pointInRing(point, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      const crosses = ((yi > point[1]) !== (yj > point[1])) &&
+        (point[0] < (xj - xi) * (point[1] - yi) / ((yj - yi) || Number.EPSILON) + xi);
+      if (crosses) inside = !inside;
+    }
+    return inside;
+  }
+
+  function interiorPoint(feature) {
+    const geometry = feature?.geometry;
+    if (!geometry) return null;
+    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+    const outerRings = (polygons || []).map(polygon => polygon?.[0]).filter(ring => ring?.length > 3);
+    const ring = outerRings.sort((a, b) => Math.abs(ringArea(b)) - Math.abs(ringArea(a)))[0];
+    if (!ring) return null;
+
+    let twiceArea = 0, x = 0, y = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+      twiceArea += cross;
+      x += (ring[j][0] + ring[i][0]) * cross;
+      y += (ring[j][1] + ring[i][1]) * cross;
+    }
+    const centroid = Math.abs(twiceArea) > 1e-12 ? [x / (3 * twiceArea), y / (3 * twiceArea)] : ring[0];
+    if (pointInRing(centroid, ring)) return centroid;
+
+    const xs = ring.map(point => point[0]), ys = ring.map(point => point[1]);
+    const bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    for (let grid = 5; grid <= 25; grid += 5) {
+      for (let row = 0; row < grid; row++) for (let column = 0; column < grid; column++) {
+        const candidate = [
+          bounds[0] + (column + 0.5) * (bounds[2] - bounds[0]) / grid,
+          bounds[1] + (row + 0.5) * (bounds[3] - bounds[1]) / grid
+        ];
+        if (pointInRing(candidate, ring)) return candidate;
+      }
+    }
+    return ring[0];
+  }
+
+  function addNationalRepresentativePoints(data, countryGeojson) {
+    if (!data.map) return;
+    const points = data.map.points || (data.map.points = []);
+    const existing = new Set(points.filter(point => point.countryIso).map(point => point.countryIso));
+    (data.map.nationalStats || []).forEach(stat => {
+      if (!stat.countryIso || existing.has(stat.countryIso) || reportedCases(stat) <= 0) return;
+      const feature = (countryGeojson.features || []).find(item => item.properties?.country_iso === stat.countryIso);
+      const coordinates = interiorPoint(feature);
+      if (!coordinates) return;
+      points.push({
+        ...stat,
+        kind: "national-representative",
+        province: "National",
+        lon: coordinates[0],
+        lat: coordinates[1]
+      });
+      existing.add(stat.countryIso);
+    });
+  }
+
+  function bindBoundaryInteraction(layerId) {
+    map.on("click", layerId, event => showInfoPanel(mapFeatureProperties(event.features[0].properties)));
+    map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mousemove", layerId, event => showHoverPopup(event, event.features[0].properties));
+    map.on("mouseleave", layerId, () => {
+      map.getCanvas().style.cursor = "";
+      hideHoverPopup();
+    });
+  }
+
+  function upsertCountryBoundary(iso3, geojson) {
+    const slug = iso3.toLowerCase();
+    const sourceId = `cases-${slug}`;
+    const fillId = `cases-fill-${slug}`;
+    const lineId = `cases-line-${slug}`;
+    const metricField = activeMapMetric().field;
+    const countryColor = riskColorExpression(metricField);
+
+    if (map.getSource(sourceId)) {
+      map.getSource(sourceId).setData(geojson);
+      map.setPaintProperty(fillId, "fill-color", countryColor);
+      map.setPaintProperty(lineId, "line-color", countryColor);
+      return;
+    }
+
+    map.addSource(sourceId, { type: "geojson", data: structuredClone(geojson) });
+    map.addLayer({ id: fillId, type: "fill", source: sourceId, paint: {
+      "fill-color": countryColor,
+      "fill-opacity": 0.72
+    }});
+    map.addLayer({ id: lineId, type: "line", source: sourceId, paint: {
+      "line-color": countryColor, "line-width": 2.2, "line-opacity": 1
+    }});
+    bindBoundaryInteraction(fillId);
+  }
+
+  function flushCountryBoundaries() {
+    const activeCodes = new Set(pendingCountryBoundaries.keys());
+    renderedCountryCodes.forEach(iso3 => {
+      if (!activeCodes.has(iso3)) map.getSource(`cases-${iso3.toLowerCase()}`)?.setData({ type: "FeatureCollection", features: [] });
+    });
+    pendingCountryBoundaries.forEach((geojson, iso3) => upsertCountryBoundary(iso3, geojson));
+    renderedCountryCodes = activeCodes;
+    map.triggerRepaint();
+  }
+
+  async function renderBoundaryLayer(data) {
+    if (!await ensureMap()) return;
+    try {
+      await loadBoundaryManifest();
+      const countries = getActiveCountryCodes(data);
+      const rawCountries = await loadCombinedBoundaries(countries, 0);
+      const countryGeojson = enrichBoundaries(rawCountries, data, 0);
+      countryGeojson.features = countryGeojson.features.filter(feature => feature.properties?.label_primary === true);
+      addNationalRepresentativePoints(data, countryGeojson);
+      extendMapExtent(countryGeojson);
+      if (!hasInitialFit) {
+        fitOutbreakExtent(0);
+        hasInitialFit = true;
+      }
+      pendingCountryBoundaries = new Map(countries.map(iso3 => [iso3, {
+        type: "FeatureCollection",
+        features: countryGeojson.features.filter(feature => feature.properties?.country_iso === iso3)
+      }]));
+      await renderAdminDetailLayer(data, true);
+      applyMapMode();
+    } catch (err) { console.error("Boundary render error:", err); }
+  }
+
+  async function renderAdminDetailLayer(data, force = false) {
+    if (!map || !boundaryManifest) return;
+    const requestedLevel = selectedAdminLevel();
+    if (!force && requestedLevel === renderedAdminLevel) return;
+    renderedAdminLevel = requestedLevel;
+    const requestId = ++boundaryRequestId;
+    const countries = getActiveCountryCodes(data);
+    const raw = requestedLevel === 0 ? { type: "FeatureCollection", features: [] } : await loadCombinedBoundaries(countries, requestedLevel);
+    if (requestId !== boundaryRequestId) return;
+    const detailGeojson = enrichBoundaries(raw, data, requestedLevel);
+    const metricField = activeMapMetric().field;
+    const detailColor = riskColorExpression(metricField);
+
+    if (map.getSource("admin-boundaries")) {
+      map.getSource("admin-boundaries").setData(detailGeojson);
+      map.setPaintProperty("admin-boundary-fill", "fill-color", detailColor);
+    } else {
+      map.addSource("admin-boundaries", { type: "geojson", data: detailGeojson });
+      map.addLayer({ id: "admin-boundary-fill", type: "fill", source: "admin-boundaries", paint: {
+        "fill-color": detailColor,
+        "fill-opacity": ["case", [">", ["to-number", ["get", metricField], 0], 0], 0.68, 0.07]
+      }});
+      map.addLayer({ id: "admin-boundary-line", type: "line", source: "admin-boundaries", paint: {
+        "line-color": ["case", [">", ["to-number", ["get", metricField], 0], 0], mapColors.moderate, "#788389"],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.35, 11, 1.1],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.48, 11, 0.82]
+      }});
+      bindBoundaryInteraction("admin-boundary-fill");
+    }
+    applyMapMode();
+  }
+
+  async function renderMap(pointsData) {
+    if (!pointsData || !Array.isArray(pointsData) || !await ensureMap()) return;
+    const points = [];
+    const bounds = new maplibregl.LngLatBounds();
+    pointsData.forEach(z => {
+      const lat = parseFloat(z.lat), lon = parseFloat(z.lon);
+      if (!isValidCoordinate(lat, lon)) return;
+      const total = Number(z.caseTotal) || getStat(z, "confirmed") + getStat(z, "suspected") + Number(z.probable || 0);
+      const confirmed = getStat(z, "confirmed");
+      const deaths = getStat(z, "deaths");
+      const recovered = getStat(z, "recovered");
+      if (Math.max(total, confirmed, deaths, recovered) <= 0) return;
+      bounds.extend([lon, lat]);
+      if (!mapExtentBounds) mapExtentBounds = new maplibregl.LngLatBounds();
+      mapExtentBounds.extend([lon, lat]);
+      points.push({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties: { ...z, caseTotal: total, confirmed, deaths, recovered } });
+    });
+    const geojson = { type: "FeatureCollection", features: points };
+    if (map.getSource("zones")) {
+      map.getSource("zones").setData(geojson);
+    } else {
+      map.addSource("zones", { type: "geojson", data: geojson, cluster: true, clusterRadius: 40, clusterMaxZoom: 13, clusterProperties: {
+        caseTotal: ["+", ["to-number", ["get", "caseTotal"], 0]],
+        confirmed: ["+", ["to-number", ["get", "confirmed"], 0]],
+        deaths: ["+", ["to-number", ["get", "deaths"], 0]],
+        recovered: ["+", ["to-number", ["get", "recovered"], 0]]
+      } });
+      map.addLayer({ id: "zone-clusters", type: "circle", source: "zones", filter: ["has", "point_count"], paint: {
+        "circle-color": riskColorExpression(activeMapMetric().field), "circle-radius": metricRadiusExpression(), "circle-stroke-color": "rgba(0,0,0,0.45)", "circle-stroke-width": 2
+      }});
+      map.addLayer({ id: "zone-cluster-count", type: "symbol", source: "zones", filter: ["has", "point_count"], layout: { "text-field": ["to-string", ["get", activeMapMetric().field]], "text-size": 11 }, paint: { "text-color": "#ffffff" } });
+      map.addLayer({ id: "zone-points", type: "circle", source: "zones", filter: ["!", ["has", "point_count"]], paint: { "circle-color": riskColorExpression(activeMapMetric().field), "circle-radius": 11, "circle-stroke-color": "rgba(0,0,0,0.45)", "circle-stroke-width": 2 } });
+      map.addLayer({ id: "zone-point-count", type: "symbol", source: "zones", filter: ["!", ["has", "point_count"]], layout: { "text-field": ["to-string", ["get", activeMapMetric().field]], "text-size": 9 }, paint: { "text-color": "#ffffff" } });
+      map.on("click", "zone-clusters", event => {
+        const feature = event.features[0];
+        map.getSource("zones").getClusterExpansionZoom(feature.properties.cluster_id).then(zoom => map.easeTo({ center: feature.geometry.coordinates, zoom }));
+      });
+      map.on("click", "zone-points", event => showInfoPanel(mapFeatureProperties(event.features[0].properties)));
+      map.on("mousemove", "zone-clusters", event => {
+        const properties = event.features[0].properties;
+        showHoverPopup(event, {
+          ...properties,
+          name: "Case cluster",
+          status: "Grouped map points",
+          confirmed: properties.confirmed,
+          suspected: Math.max(0, Number(properties.caseTotal) - Number(properties.confirmed)),
+          deaths: properties.deaths,
+          recovered: properties.recovered
+        }, "Click to expand cluster");
+      });
+      map.on("mousemove", "zone-points", event => showHoverPopup(event, event.features[0].properties));
+      ["zone-clusters", "zone-points"].forEach(id => {
+        map.on("mouseenter", id, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", id, () => {
+          map.getCanvas().style.cursor = "";
+          hideHoverPopup();
+        });
+      });
+    }
+    if (!bounds.isEmpty() && !hasInitialFit) {
+      map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      hasInitialFit = true;
+    }
+    applyMapMode();
+    applyMapMetricStyling();
+  }
+
+  function applyMapMetricStyling() {
+    if (!map || !map.isStyleLoaded()) return;
+    const metric = activeMapMetric();
+    const color = riskColorExpression(metric.field);
+    renderedCountryCodes.forEach(iso3 => {
+      const slug = iso3.toLowerCase();
+      if (map.getLayer(`cases-fill-${slug}`)) map.setPaintProperty(`cases-fill-${slug}`, "fill-color", color);
+      if (map.getLayer(`cases-line-${slug}`)) map.setPaintProperty(`cases-line-${slug}`, "line-color", color);
+    });
+    if (map.getLayer("admin-boundary-fill")) {
+      map.setPaintProperty("admin-boundary-fill", "fill-color", color);
+      map.setPaintProperty("admin-boundary-fill", "fill-opacity", ["case", [">", ["to-number", ["get", metric.field], 0], 0], 0.68, 0.07]);
+    }
+    if (map.getLayer("admin-boundary-line")) {
+      map.setPaintProperty("admin-boundary-line", "line-color", ["case", [">", ["to-number", ["get", metric.field], 0], 0], mapColors.moderate, "#788389"]);
+    }
+    if (map.getLayer("zone-clusters")) {
+      map.setPaintProperty("zone-clusters", "circle-color", color);
+      map.setPaintProperty("zone-clusters", "circle-radius", metricRadiusExpression(metric));
+      map.setLayoutProperty("zone-cluster-count", "text-field", ["to-string", ["get", metric.field]]);
+      map.setPaintProperty("zone-points", "circle-color", color);
+      map.setLayoutProperty("zone-point-count", "text-field", ["to-string", ["get", metric.field]]);
+    }
+    updateMapLegend();
+  }
+
+  function setMapMode(nextMode) {
+    mapMode = nextMode;
+    hideHoverPopup();
+    document.querySelectorAll("[data-map-mode]").forEach(btn => btn.classList.toggle("active", btn.dataset.mapMode === mapMode));
+    applyMapMode();
+  }
+
+  function applyMapMode() {
+    if (!map) return;
+    const showBoundaries = mapMode === "choropleth";
+    const showPoints = mapMode === "points";
+    (map.getStyle()?.layers || []).forEach(layer => {
+      const id = layer.id;
+      if (id.startsWith("cases-") || ["admin-boundary-fill", "admin-boundary-line"].includes(id)) {
+        map.setLayoutProperty(id, "visibility", showBoundaries ? "visible" : "none");
+      }
+    });
+    ["zone-clusters", "zone-cluster-count", "zone-points", "zone-point-count"].forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", showPoints ? "visible" : "none"); });
+  }
+
+  function recordCountry(item) {
+    return String(item?.country || item?.country_name || item?.Country || "").replace(/\s*[*#†‡]+\s*$/, "").trim();
+  }
+
+  function recordProvince(item) {
+    const inferred = item?.levelHint === "province" || (!item?.scope && item?.country && item?.name && !item?.kind)
+      ? item.name
+      : "";
+    return String(item?.province || item?.Province || inferred || "").trim();
+  }
+
+  function isMeaningfulProvince(name, country) {
+    const provinceKey = normalizeBoundaryName(name);
+    const countryKey = normalizeCountryName(country);
+    if (!provinceKey || /^(national|unknown)$/.test(provinceKey)) return false;
+    return provinceKey !== countryKey && !countryKey.endsWith(` ${provinceKey}`);
+  }
+
+  function matchesGeography(item, country, province) {
+    if (country && normalizeCountryName(recordCountry(item)) !== normalizeCountryName(country)) return false;
+    if (province && normalizeBoundaryName(recordProvince(item)) !== normalizeBoundaryName(province)) return false;
+    return true;
+  }
+
+  function summarizeRecords(records, sourceTotals) {
+    const totals = { confirmed: 0, suspected: 0, probable: 0, deaths: 0, deathsConfirmed: 0, deathsSuspected: 0, recovered: 0 };
+    (records || []).forEach(item => {
+      totals.confirmed += getStat(item, "confirmed");
+      totals.suspected += getStat(item, "suspected");
+      totals.probable += Number(item.probable) || 0;
+      totals.deaths += getStat(item, "deaths");
+      totals.deathsConfirmed += Number(item.deathsConfirmed ?? item.dConf ?? item.deaths) || 0;
+      totals.deathsSuspected += Number(item.deathsSuspected ?? item.dSusp) || 0;
+      totals.recovered += getStat(item, "recovered");
+    });
+    totals.source = sourceTotals?.source || "Filtered dashboard data";
+    totals.sourceDate = sourceTotals?.sourceDate || "";
+    return totals;
+  }
+
+  function getFilteredDashboardData(data) {
+    if (!data) return data;
+    const country = document.getElementById("countryFilter")?.value || "";
+    const province = document.getElementById("provinceFilter")?.value || "";
+    if (!country && !province) return data;
+
+    const zones = (data.zones || []).filter(item => matchesGeography(item, country, province));
+    const boundaryStats = (data.boundaryStats || []).filter(item => matchesGeography(item, country, province));
+    const provinces = (data.provinces || []).filter(item => matchesGeography(item, country, province));
+    const nationalStats = (data.map?.nationalStats || []).filter(item => !province && matchesGeography(item, country, ""));
+    const adminStats = (data.map?.adminStats || []).filter(item => matchesGeography(item, country, province));
+    const points = (data.map?.points || []).filter(item => matchesGeography(item, country, province));
+    const totalRecords = province ? zones : (nationalStats.length ? nationalStats : zones);
+
+    return {
+      ...data,
+      zones,
+      boundaryStats,
+      provinces,
+      totals: summarizeRecords(totalRecords, data.totals),
+      map: { ...(data.map || {}), points, nationalStats, adminStats },
+      geographyFilter: { country, province }
+    };
+  }
+
+  function populateGeographyFilters(data) {
+    const countrySelect = document.getElementById("countryFilter");
+    const provinceSelect = document.getElementById("provinceFilter");
+    if (!countrySelect || !provinceSelect) return;
+    const selectedCountry = countrySelect.value;
+    const selectedProvince = provinceSelect.value;
+    const records = [
+      ...(data.zones || []), ...(data.provinces || []),
+      ...(data.map?.nationalStats || []), ...(data.map?.points || [])
+    ];
+    const countries = Array.from(new Set(records.map(recordCountry).filter(Boolean))).sort();
+    countrySelect.innerHTML = '<option value="">All countries</option>' + countries.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    if (countries.includes(selectedCountry)) countrySelect.value = selectedCountry;
+
+    const activeCountry = countrySelect.value;
+    const provinces = Array.from(new Set(records
+      .filter(item => activeCountry && matchesGeography(item, activeCountry, ""))
+      .filter(item => isMeaningfulProvince(recordProvince(item), recordCountry(item)))
+      .map(recordProvince))).sort();
+    provinceSelect.innerHTML = '<option value="">All provinces</option>' + provinces.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    provinceSelect.disabled = !activeCountry || !provinces.length;
+    if (provinces.includes(selectedProvince)) provinceSelect.value = selectedProvince;
+  }
+
+  function renderFilteredDashboard() {
+    if (!currentDashboardData) return;
+    const view = getFilteredDashboardData(currentDashboardData);
+    renderDashboardView(view, currentDashboardData);
+    hasInitialFit = false;
+    mapExtentBounds = null;
+    const manifestPromise = loadBoundaryManifest().catch(() => null);
+    void renderMapData(view, manifestPromise, ensureMap());
+  }
+
+  function geographicRanking(data) {
+    const filter = data.geographyFilter || {};
+    if (filter.province) {
+      const zones = (data.boundaryStats || []).filter(item => normalizeBoundaryName(item.name) !== normalizeBoundaryName(filter.province));
+      return { scope: "Health zones", records: zones.length ? zones : (data.zones || []) };
+    }
+    if (filter.country) {
+      const external = data.subnationalByCountry?.[normalizeCountryName(filter.country)] || [];
+      if (external.length) return { scope: "Health zones", records: external, availableMetrics: ["total", "confirmed", "deaths"] };
+      const provinces = (data.provinces || []).filter(item => isMeaningfulProvince(item.name, item.country));
+      const adminProvinces = (data.map?.adminStats || []).filter(item => item.levelHint === "province" && isMeaningfulProvince(item.name, item.country));
+      const records = provinces.length ? provinces : adminProvinces;
+      return { scope: records.length ? "Provinces" : "No public subnational data", records };
+    }
+    const countries = data.map?.nationalStats || [];
+    return { scope: "Countries", records: countries.length ? countries : (data.provinces || []) };
+  }
+
+  function geographicLabel(item, scope) {
+    const name = String(item?.name || "").trim();
+    const country = recordCountry(item);
+    if (scope === "Countries") return country || name || "Unknown";
+    if (!country || normalizeBoundaryName(name) === normalizeCountryName(country)) return name || country || "Unknown";
+    return name;
+  }
+
+  function renderCharts(data) {
+    if (!window.Chart) return;
+    const ctxTrend = document.getElementById('trendChart'), ctxBar = document.getElementById('barChart'), ctxDoughnut = document.getElementById('doughnutChart');
+    if (ctxTrend && data.timeline) {
+      const fullTimeline = [...data.timeline].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      const selectedWindow = document.getElementById("trendWindow")?.value || "14";
+      const timeline = selectedWindow === "all" ? fullTimeline : fullTimeline.slice(-Number(selectedWindow));
+      const cumulativeCases = timeline.map(t => (Number(t.confirmed) || 0) + (Number(t.suspected) || 0) + (Number(t.probable) || 0));
+      const newlyReported = cumulativeCases.map((value, index) => index === 0 ? null : Math.max(0, value - cumulativeCases[index - 1]));
+      const range = document.getElementById("trendRange");
+      if (range) {
+        const filterNote = data.geographyFilter ? " · national history" : "";
+        range.textContent = (timeline.length > 1
+          ? `${timeline[0].date} → ${timeline[timeline.length - 1].date} · ${timeline.length}/${fullTimeline.length} reports`
+          : timeline.length === 1 ? `${timeline[0].date} · more snapshots needed` : "No dated snapshots") + filterNote;
+      }
+      if(chartInstances.trend) chartInstances.trend.destroy();
+      chartInstances.trend = new Chart(ctxTrend.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: timeline.map(t => t.date),
+          datasets: [
+            {
+              type: 'bar', label: 'New since prior report', data: newlyReported,
+              backgroundColor: 'rgba(233,196,106,0.28)', borderColor: colors.yellow,
+              borderWidth: 0, borderRadius: 2, maxBarThickness: 18, yAxisID: 'yDaily', order: 2
+            },
+            {
+              type: 'line', label: 'Cumulative reported cases', data: cumulativeCases,
+              borderColor: colors.teal, backgroundColor: 'rgba(84,183,166,0.13)', borderWidth: 2.5,
+              pointRadius: 0, pointHoverRadius: 4, tension: 0.2, fill: true,
+              yAxisID: 'y', order: 1
+            },
+            { type: 'line', label: 'Cumulative deaths', data: timeline.map(t => Number(t.deaths) || 0), borderColor: colors.red, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.2, fill: false, yAxisID: 'y', order: 1, hidden: true }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 7, maxRotation: 0 } },
+            y: { beginAtZero: false, position: 'left', ticks: { precision: 0, maxTicksLimit: 5 } },
+            yDaily: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, maxTicksLimit: 4 } }
+          },
+          plugins: {
+            legend: { display: true, position: 'top', align: 'start', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, padding: 10, font: { size: 9 } } },
+            tooltip: {
+              position: 'growthLine',
+              xAlign: 'left',
+              yAlign: 'bottom',
+              caretPadding: 20,
+              padding: 7,
+              titleMarginBottom: 3,
+              bodySpacing: 2,
+              boxWidth: 7,
+              boxHeight: 7,
+              usePointStyle: true,
+              titleFont: { size: 10, weight: '600' },
+              bodyFont: { size: 9 },
+              callbacks: {
+                title: items => items.length ? `Report date: ${items[0].label}` : '',
+                label: item => {
+                  const names = { 0: 'New', 1: 'Cases', 2: 'Deaths' };
+                  return ` ${names[item.datasetIndex] || item.dataset.label}: ${Number(item.raw || 0).toLocaleString()}`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    if (ctxBar && data.provinces) {
+      if(chartInstances.bar) chartInstances.bar.destroy();
+      const geography = geographicRanking(data);
+      const geographicStats = geography.records;
+      document.getElementById("geoTitle").textContent = `Geographic Impact — ${geography.scope}`;
+      const metric = activeMapMetric();
+      const geoEmpty = document.getElementById("geoEmpty");
+      const metricAvailable = !geography.availableMetrics || geography.availableMetrics.includes(metric.key);
+      const hasGeography = geographicStats.length > 0 && metricAvailable;
+      ctxBar.hidden = !hasGeography;
+      geoEmpty.hidden = hasGeography;
+      geoEmpty.textContent = hasGeography ? "" : metricAvailable
+        ? "No structured public subnational dataset is available for this country."
+        : `${metric.label} is not reported in the available health-zone dataset.`;
+      const geoLimit = document.getElementById("geoLimit")?.value || "all";
+      const ranked = [...geographicStats].sort((a,b) => mapMetricValue(b, metric) - mapMetricValue(a, metric));
+      const topP = geoLimit === "all" ? ranked : ranked.slice(0, Number(geoLimit));
+      if (hasGeography) {
+        chartInstances.bar = new Chart(ctxBar.getContext('2d'), {
+          type: 'bar',
+          data: { labels: topP.map(p => geographicLabel(p, geography.scope)), datasets: [{ label: metric.label, data: topP.map(p => mapMetricValue(p, metric)), backgroundColor: colors.teal }] },
+          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+      }
+    }
+    if (ctxDoughnut && data.totals) {
+      if(chartInstances.doughnut) chartInstances.doughnut.destroy();
+      const total = (data.totals.confirmed || 0) + (data.totals.suspected || 0) + (data.totals.deaths || 0);
+      chartInstances.doughnut = new Chart(ctxDoughnut.getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: ['Confirmed', 'Suspected', 'Deaths'], datasets: [{ data: [data.totals.confirmed, data.totals.suspected, data.totals.deaths], backgroundColor: [colors.teal, colors.yellow, colors.red], borderWidth: 0 }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false, cutout: '62%', layout: { padding: 0 },
+          plugins: {
+            tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw.toLocaleString()} (${total > 0 ? ((c.raw / total) * 100).toFixed(1) : 0}%)` } },
+            legend: {
+              position: 'right', align: 'center',
+              labels: {
+                boxWidth: 10, boxHeight: 10, padding: 8, color: '#fff', font: { size: 11, weight: '600' },
+                generateLabels: chart => chart.data.labels.map((l, i) => ({ text: `${l}: ${total > 0 ? ((chart.data.datasets[0].data[i] / total) * 100).toFixed(1) : 0}%`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: chart.data.datasets[0].backgroundColor[i], lineWidth: 0, hidden: false, index: i, fontColor: '#fff' }))
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  function parseDailyHistoryCsv(text, valueColumn) {
+    const rows = String(text || "").trim().split(/\r?\n/);
+    if (rows.length < 2) return [];
+    const headers = rows[0].split(",");
+    const dateIndex = headers.indexOf("date");
+    const valueIndex = headers.indexOf(valueColumn);
+    if (dateIndex < 0 || valueIndex < 0) return [];
+    return rows.slice(1).map(row => {
+      const cells = row.split(",");
+      const value = Number(cells[valueIndex]);
+      return { date: cells[dateIndex], value };
+    }).filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.value));
+  }
+
+  async function loadDailyHistory(force = false) {
+    if (force || (dailyHistoryLoadedAt && Date.now() - dailyHistoryLoadedAt >= HISTORY_REFRESH_MS)) {
+      dailyHistoryPromise = null;
+    }
+    if (dailyHistoryPromise) return dailyHistoryPromise;
+    dailyHistoryPromise = Promise.all([
+      fetch(runtimeSources.dailyHistory.confirmed, { cache: force ? "reload" : "default" }).then(response => {
+        if (!response.ok) throw new Error(`Daily cases returned ${response.status}`);
+        return response.text();
+      }),
+      fetch(runtimeSources.dailyHistory.deaths, { cache: force ? "reload" : "default" }).then(response => {
+        if (!response.ok) throw new Error(`Daily deaths returned ${response.status}`);
+        return response.text();
+      })
+    ]).then(([caseCsv, deathCsv]) => {
+      const byDate = new Map();
+      parseDailyHistoryCsv(caseCsv, "national_cumulative_confirmed_cases").forEach(row => {
+        byDate.set(row.date, { date: row.date, confirmed: row.value, suspected: 0, probable: 0, deaths: 0, recovered: 0, source: "INSP DRC daily situation report" });
+      });
+      parseDailyHistoryCsv(deathCsv, "national_cumulative_confirmed_deaths").forEach(row => {
+        const point = byDate.get(row.date);
+        if (point) point.deaths = row.value;
+      });
+      dailyHistoryLoadedAt = Date.now();
+      return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+    }).catch(error => {
+      console.warn("Daily history unavailable; using API snapshots only:", error);
+      dailyHistoryPromise = null;
+      return [];
+    });
+    return dailyHistoryPromise;
+  }
+
+  function parseSubnationalCsv(text, valueColumn) {
+    const rows = String(text || "").trim().split(/\r?\n/);
+    if (rows.length < 2) return [];
+    const headers = rows[0].split(",");
+    const nameIndex = headers.indexOf("nom");
+    const dateIndex = headers.indexOf("date");
+    const valueIndex = headers.indexOf(valueColumn);
+    if (nameIndex < 0 || dateIndex < 0 || valueIndex < 0) return [];
+    return rows.slice(1).map(row => {
+      const cells = row.split(",");
+      const value = Number(cells[valueIndex]);
+      return { name: String(cells[nameIndex] || "").trim(), date: cells[dateIndex], value };
+    }).filter(row => row.name && !/^(na|drc)$/i.test(row.name) && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.value));
+  }
+
+  function latestSubnationalValues(rows) {
+    const latest = new Map();
+    rows.forEach(row => {
+      const current = latest.get(normalizeBoundaryName(row.name));
+      if (!current || row.date >= current.date) latest.set(normalizeBoundaryName(row.name), row);
+    });
+    return latest;
+  }
+
+  async function loadSubnationalData(force = false) {
+    if (!runtimeSources.subnational?.drcHealthZonesConfirmed || !runtimeSources.subnational?.drcHealthZonesDeaths) return [];
+    if (force || (subnationalLoadedAt && Date.now() - subnationalLoadedAt >= HISTORY_REFRESH_MS)) subnationalPromise = null;
+    if (subnationalPromise) return subnationalPromise;
+    subnationalPromise = Promise.all([
+      fetch(runtimeSources.subnational.drcHealthZonesConfirmed, { cache: force ? "reload" : "default" }).then(response => {
+        if (!response.ok) throw new Error(`DRC health-zone cases returned ${response.status}`);
+        return response.text();
+      }),
+      fetch(runtimeSources.subnational.drcHealthZonesDeaths, { cache: force ? "reload" : "default" }).then(response => {
+        if (!response.ok) throw new Error(`DRC health-zone deaths returned ${response.status}`);
+        return response.text();
+      })
+    ]).then(([caseCsv, deathCsv]) => {
+      const cases = latestSubnationalValues(parseSubnationalCsv(caseCsv, "cumulative_confirmed_cases"));
+      const deaths = latestSubnationalValues(parseSubnationalCsv(deathCsv, "cumulative_confirmed_deaths"));
+      const records = Array.from(new Set([...cases.keys(), ...deaths.keys()])).map(key => {
+        const caseRow = cases.get(key), deathRow = deaths.get(key);
+        const confirmed = Number(caseRow?.value) || 0;
+        const deathCount = Number(deathRow?.value) || 0;
+        return {
+          name: caseRow?.name || deathRow?.name || key,
+          country: "Democratic Republic of the Congo",
+          levelHint: "health-zone",
+          confirmed,
+          suspected: 0,
+          deaths: deathCount,
+          recovered: 0,
+          caseTotal: confirmed,
+          lastUpdated: [caseRow?.date, deathRow?.date].filter(Boolean).sort().pop() || "",
+          source: "INSP/INRB daily health-zone situation reports"
+        };
+      }).filter(record => record.caseTotal > 0 || record.deaths > 0);
+      subnationalLoadedAt = Date.now();
+      return records.sort((a, b) => b.confirmed - a.confirmed);
+    }).catch(error => {
+      console.warn("Subnational data unavailable:", error);
+      subnationalPromise = null;
+      return [];
+    });
+    return subnationalPromise;
+  }
+
+  function mergeSubnationalData(data, records) {
+    if (!data || !records.length) return data;
+    const known = new Map([...(data.zones || []), ...(data.boundaryStats || [])]
+      .filter(item => item?.name)
+      .map(item => [normalizeBoundaryName(item.name), item]));
+    const enriched = records.map(record => ({ ...known.get(normalizeBoundaryName(record.name)), ...record }));
+    data.subnationalByCountry = {
+      ...(data.subnationalByCountry || {}),
+      [normalizeCountryName("Democratic Republic of the Congo")]: enriched
+    };
+    return data;
+  }
+
+  async function enrichDashboardSubnational(data, force = false, backend = cachedDashboardMeta) {
+    const records = await loadSubnationalData(force);
+    if (!records.length || !data) return;
+    mergeSubnationalData(data, records);
+    if (currentDashboardData === data) renderFilteredDashboard();
+    cacheDashboardData(data, backend);
+  }
+
+  function mergeDailyHistory(data, history) {
+    if (!history.length) return data;
+    const byDate = new Map(history.map(point => [point.date, point]));
+    (data.timeline || []).forEach(point => {
+      const existing = byDate.get(point.date);
+      byDate.set(point.date, existing ? {
+        ...existing,
+        ...point,
+        confirmed: Math.max(Number(existing.confirmed) || 0, Number(point.confirmed) || 0),
+        deaths: Math.max(Number(existing.deaths) || 0, Number(point.deaths) || 0),
+        source: point.source || "WHO / INSP consolidated report"
+      } : point);
+    });
+    data.timeline = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+    return data;
+  }
+
+  function renderDashboardView(data, sourceData = data) {
+    document.getElementById("hdr-confirmed").innerText = (data.totals.confirmed || 0).toLocaleString();
+    document.getElementById("hdr-suspected").innerText = (data.totals.suspected || 0).toLocaleString();
+    document.getElementById("hdr-deaths").innerText = (data.totals.deaths || 0).toLocaleString();
+    document.getElementById("hdr-recovered").innerText = (data.totals.recovered || 0).toLocaleString();
+    const confirmedDeaths = data.totals.deathsConfirmed !== undefined ? data.totals.deathsConfirmed : data.totals.deaths;
+    const cfr = data.totals.confirmed > 0 ? ((confirmedDeaths / data.totals.confirmed) * 100).toFixed(1) : 0;
+    const recRate = data.totals.confirmed > 0 ? ((data.totals.recovered / data.totals.confirmed) * 100).toFixed(1) : 0;
+    document.getElementById("risk-cfr").innerText = cfr + "%";
+    document.getElementById("risk-recovery").innerText = recRate + "%";
+    renderCharts(data);
+    document.getElementById("dataSource").textContent = sourceData.totals.source
+      ? `Source: ${sourceData.totals.source}`
+      : "Source: Cases sheet";
+    document.getElementById("dataAsOfBadge").textContent = `Data as of: ${sourceData.totals.sourceDate || "—"}`;
+  }
+
+  function renderDashboardSummary(data) {
+    currentDashboardData = data;
+    populateGeographyFilters(data);
+    renderDashboardView(getFilteredDashboardData(data), data);
+  }
+
+  function cacheDashboardData(data, backend = cachedDashboardMeta) {
+    try {
+      cachedDashboardMeta = {
+        version: backend?.version || data.apiVersion || "",
+        dataRevision: String(backend?.dataRevision || "0")
+      };
+      localStorage.setItem(DASHBOARD_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), ...cachedDashboardMeta, data }));
+    } catch (err) {
+      console.warn("Dashboard cache unavailable:", err);
+    }
+  }
+
+  function renderCachedDashboard() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(DASHBOARD_STORAGE_KEY) || "null");
+      if (!cached?.data?.totals) return false;
+      cachedDashboardMeta = {
+        version: cached.version || cached.data.apiVersion || "",
+        dataRevision: String(cached.dataRevision || "")
+      };
+      renderDashboardSummary(cached.data);
+      document.getElementById("lastSync").textContent = `Saved ${new Date(cached.savedAt).toLocaleTimeString()}`;
+      const mode = document.getElementById("dataModeBadge");
+      mode.textContent = "Cached data";
+      mode.className = "status-badge cached";
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function applyBackendConfig(backend) {
+    const sources = backend?.sources || {};
+    runtimeSources = {
+      ...runtimeSources,
+      ...sources,
+      dailyHistory: { ...runtimeSources.dailyHistory, ...(sources.dailyHistory || {}) },
+      subnational: { ...runtimeSources.subnational, ...(sources.subnational || {}) }
+    };
+    if (!runtimeSources.mapStyle || !runtimeSources.boundaryManifest || !runtimeSources.dailyHistory.confirmed || !runtimeSources.dailyHistory.deaths) {
+      throw new Error("No complete dashboard source registry is available");
+    }
+    const backendInterval = Number(backend?.refreshIntervalMs);
+    if (backendInterval >= 10000) AUTO_REFRESH_MS = backendInterval;
+  }
+
+  async function confirmBackend() {
+    if (!API_BASE) throw new Error("API endpoint is not configured");
+    const separator = API_BASE.includes("?") ? "&" : "?";
+    const backend = await fetchJsonWithRetry(`${API_BASE}${separator}action=ping&_request=${Date.now()}`, 2);
+    if (backend?.status !== "ok") throw new Error(backend?.error || "Backend health check failed");
+    applyBackendConfig(backend);
+    return backend;
+  }
+
+  async function renderMapData(data, manifestPromise, mapPromise) {
+    pendingMapData = data;
+    if (mapRenderInProgress) return;
+    mapRenderInProgress = true;
+    try {
+      if (!(await manifestPromise)) throw new Error("Boundary manifest is unavailable");
+      await mapPromise;
+      while (pendingMapData) {
+        const latestData = pendingMapData;
+        pendingMapData = null;
+        hydrateCountryCodes(latestData);
+        await renderBoundaryLayer(latestData);
+        await renderMap(latestData.map?.points || latestData.zones);
+        flushCountryBoundaries();
+        applyMapMode();
+      }
+    } catch (err) {
+      console.error("Map update failed:", err);
+    } finally {
+      mapRenderInProgress = false;
+    }
+  }
+
+  async function loadData(options = {}) {
+    const forceRefresh = options === true || options.force === true;
+    if (dataLoadInProgress) {
+      pendingForceRefresh = pendingForceRefresh || forceRefresh;
+      return;
+    }
+    const refreshButton = document.getElementById("refreshNow");
+    dataLoadInProgress = true;
+    if (refreshButton) {
+      refreshButton.disabled = true;
+      refreshButton.textContent = "Refreshing…";
+    }
+    // The basemap and local boundary catalog are independent of the API.
+    // Start them immediately, and render saved overlays while data is checked.
+    const mapPromise = ensureMap();
+    const manifestPromise = loadBoundaryManifest().catch(err => {
+      console.error("Boundary manifest failed:", err);
+      return null;
+    });
+    if (currentDashboardData) void renderMapData(getFilteredDashboardData(currentDashboardData), manifestPromise, mapPromise);
+    let dataLoaded = false;
+    try {
+      document.getElementById("lastSync").textContent = "Checking…";
+      const mode = document.getElementById("dataModeBadge");
+      mode.textContent = "Checking";
+      mode.className = "status-badge";
+      const backend = await confirmBackend();
+      const cacheIsCurrent = !forceRefresh && currentDashboardData && cachedDashboardMeta &&
+        cachedDashboardMeta.version === backend.version &&
+        cachedDashboardMeta.dataRevision === String(backend.dataRevision || "0");
+
+      if (cacheIsCurrent) {
+        document.getElementById("lastSync").textContent = `Checked ${new Date().toLocaleTimeString()}`;
+        mode.textContent = "Live";
+        mode.className = "status-badge live";
+        void loadDailyHistory().then(history => {
+          if (!history.length || !currentDashboardData) return;
+          mergeDailyHistory(currentDashboardData, history);
+          renderCharts(getFilteredDashboardData(currentDashboardData));
+        });
+        void enrichDashboardSubnational(currentDashboardData, false, backend);
+        return;
+      }
+
+      const dataUrl = `${API_BASE}?action=getData${forceRefresh ? `&fresh=1&_request=${Date.now()}` : ""}`;
+      const data = await fetchJsonWithRetry(dataUrl);
+      if (data.error) throw new Error(data.error);
+      renderDashboardSummary(data);
+      cacheDashboardData(data, backend);
+      dataLoaded = true;
+      document.getElementById("lastSync").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      mode.textContent = "Live";
+      mode.className = "status-badge live";
+      // Map geometry is substantially heavier than the statistics payload. It
+      // continues in the background and never blocks refresh controls/charts.
+      void renderMapData(getFilteredDashboardData(data), manifestPromise, mapPromise);
+      // Historical daily reports enrich the curve independently and do not
+      // delay headline figures, controls, or map startup.
+      void loadDailyHistory(forceRefresh).then(history => {
+        if (!history.length) return;
+        mergeDailyHistory(data, history);
+        renderCharts(getFilteredDashboardData(data));
+        cacheDashboardData(data, backend);
+      });
+      void enrichDashboardSubnational(data, forceRefresh, backend);
+    } catch (err) {
+      console.error("Load failed:", err);
+      if (!dataLoaded) {
+        document.getElementById("lastSync").textContent = currentDashboardData
+          ? "Showing saved copy"
+          : "Retry pending";
+        const mode = document.getElementById("dataModeBadge");
+        mode.textContent = currentDashboardData ? "Backend unavailable" : "Unavailable";
+        mode.className = currentDashboardData ? "status-badge cached" : "status-badge error";
+      }
+    } finally {
+      dataLoadInProgress = false;
+      if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = "Refresh now";
+      }
+      if (pendingForceRefresh) {
+        pendingForceRefresh = false;
+        setTimeout(() => loadData({ force: true }), 0);
+      }
+    }
+  }
+
+  function updateAutoRefreshControl() {
+    const button = document.getElementById("autoRefresh");
+    if (!button) return;
+    button.classList.toggle("active", autoRefreshEnabled);
+    button.setAttribute("aria-pressed", String(autoRefreshEnabled));
+    button.textContent = autoRefreshEnabled ? "Auto: 30s" : "Auto: off";
+  }
+
+  function scheduleAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = autoRefreshEnabled ? setInterval(() => loadData(), AUTO_REFRESH_MS) : null;
+    updateAutoRefreshControl();
+  }
+
+  function initializeDashboard() {
+    renderCachedDashboard();
+    loadData();
+  }
+
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initializeDashboard); } else { initializeDashboard(); }
+  document.querySelectorAll("[data-map-mode]").forEach(btn => btn.addEventListener("click", () => setMapMode(btn.dataset.mapMode)));
+  document.getElementById("adminLevel").addEventListener("change", () => {
+    renderedAdminLevel = -1;
+    if (currentDashboardData) renderAdminDetailLayer(getFilteredDashboardData(currentDashboardData), true);
+  });
+  document.getElementById("mapMetric").addEventListener("change", () => {
+    applyMapMetricStyling();
+    if (currentDashboardData) renderCharts(getFilteredDashboardData(currentDashboardData));
+  });
+  document.getElementById("countryFilter").addEventListener("change", () => {
+    document.getElementById("provinceFilter").value = "";
+    populateGeographyFilters(currentDashboardData || {});
+    renderFilteredDashboard();
+  });
+  document.getElementById("provinceFilter").addEventListener("change", renderFilteredDashboard);
+  document.getElementById("refreshNow").addEventListener("click", () => loadData({ force: true }));
+  document.getElementById("autoRefresh").addEventListener("click", () => {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    scheduleAutoRefresh();
+  });
+  document.getElementById("trendWindow").addEventListener("change", () => {
+    if (currentDashboardData) renderCharts(getFilteredDashboardData(currentDashboardData));
+  });
+  document.getElementById("geoLimit").addEventListener("change", () => {
+    if (currentDashboardData) renderCharts(getFilteredDashboardData(currentDashboardData));
+  });
+  window.addEventListener("storage", event => {
+    if (event.key === REFRESH_SIGNAL_KEY && event.newValue) loadData({ force: true });
+  });
+  updateMapLegend();
+  scheduleAutoRefresh();
+</script>
+</body>
+</html>

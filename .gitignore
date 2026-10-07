@@ -1,0 +1,46 @@
+# Local environment and secret files
+.env
+.env.*
+!.env.example
+*.local
+secrets/
+credentials/
+credentials*.json
+client_secret*.json
+service-account*.json
+token*.json
+*.pem
+*.key
+*.p12
+
+# Google Apps Script local authentication and project linkage
+.clasprc.json
+.clasp.json
+Code.gs
+code.gs
+*.gs
+
+# Dependencies, caches, logs, and generated reports
+node_modules/
+.cache/
+.tmp/
+tmp/
+coverage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local QA and browser captures
+*-qa.png
+*-qa.jpg
+screenshot*.png
+
+# Editor and operating-system files
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
+
