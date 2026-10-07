@@ -1,7 +1,5 @@
 # Ebola Outbreak 2026 Dashboard
 
-🌐 **Live Dashboard:** [https://benard10.github.io/Ebola-Outbreak-2026-Lens/](https://benard10.github.io/Ebola-Outbreak-2026-Lens/)
-
 An interactive Ebola surveillance dashboard with a Google Sheets and Google Apps Script backend. It combines national WHO snapshots, field-entered case records, public daily situation-report datasets, and on-demand administrative boundaries.
 
 ## What the application provides
