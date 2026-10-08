@@ -1356,8 +1356,49 @@
       if (hasGeography) {
         chartInstances.bar = new Chart(ctxBar.getContext('2d'), {
           type: 'bar',
-          data: { labels: topP.map(p => geographicLabel(p, geography.scope)), datasets: [{ label: metric.label, data: topP.map(p => mapMetricValue(p, metric)), backgroundColor: colors.teal }] },
-          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+          data: {
+            labels: topP.map(p => geographicLabel(p, geography.scope)),
+            datasets: [{
+              label: metric.label,
+              data: topP.map(p => mapMetricValue(p, metric)),
+              backgroundColor: colors.teal,
+              hoverBackgroundColor: '#72cbbd',
+              borderRadius: 2
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', axis: 'y', intersect: false },
+            onHover: (event, elements, chart) => {
+              chart.canvas.style.cursor = elements.length ? 'pointer' : 'default';
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                enabled: true,
+                displayColors: false,
+                backgroundColor: 'rgba(20, 27, 30, 0.96)',
+                borderColor: colors.teal,
+                borderWidth: 1,
+                cornerRadius: 6,
+                caretPadding: 8,
+                padding: 10,
+                titleColor: '#ffffff',
+                bodyColor: '#dce7e5',
+                titleFont: { size: 12, weight: '600' },
+                bodyFont: { size: 11 },
+                callbacks: {
+                  title: items => items.length ? items[0].label : '',
+                  label: item => `${metric.label}: ${Number(item.parsed.x || 0).toLocaleString()}`
+                }
+              }
+            },
+            scales: {
+              x: { ticks: { callback: value => Number(value).toLocaleString() } }
+            }
+          }
         });
       }
     }
