@@ -1253,8 +1253,36 @@
       const records = provinces.length ? provinces : adminProvinces;
       return { scope: records.length ? "Provinces" : "No public subnational data", records };
     }
-    const countries = data.map?.nationalStats || [];
+    const countries = consolidateCountryRecords(data.map?.nationalStats || []);
     return { scope: "Countries", records: countries.length ? countries : (data.provinces || []) };
+  }
+
+  function consolidateCountryRecords(records) {
+    const consolidated = new Map();
+    (records || []).forEach(item => {
+      const country = recordCountry(item) || String(item?.name || "").trim();
+      const key = String(item?.countryIso || resolveCountryIso(country) || normalizeCountryName(country));
+      if (!key) return;
+      const existing = consolidated.get(key);
+      if (!existing) {
+        consolidated.set(key, { ...item, name: country, country });
+        return;
+      }
+      const preferred = reportedCases(item) > reportedCases(existing) ? item : existing;
+      consolidated.set(key, {
+        ...existing,
+        ...preferred,
+        name: country,
+        country,
+        caseTotal: Math.max(reportedCases(existing), reportedCases(item)),
+        confirmed: Math.max(getStat(existing, "confirmed"), getStat(item, "confirmed")),
+        suspected: Math.max(getStat(existing, "suspected"), getStat(item, "suspected")),
+        probable: Math.max(Number(existing.probable) || 0, Number(item.probable) || 0),
+        deaths: Math.max(getStat(existing, "deaths"), getStat(item, "deaths")),
+        recovered: Math.max(getStat(existing, "recovered"), getStat(item, "recovered"))
+      });
+    });
+    return Array.from(consolidated.values());
   }
 
   function geographicLabel(item, scope) {
@@ -1372,12 +1400,13 @@
             maintainAspectRatio: false,
             interaction: { mode: 'nearest', axis: 'y', intersect: false },
             onHover: (event, elements, chart) => {
-              chart.canvas.style.cursor = elements.length ? 'pointer' : 'default';
+              const hoverEnabled = Boolean(chart.options.plugins.tooltip.enabled);
+              chart.canvas.style.cursor = hoverEnabled && elements.length ? 'pointer' : 'default';
             },
             plugins: {
               legend: { display: false },
               tooltip: {
-                enabled: true,
+                enabled: document.querySelector('.bar-panel')?.classList.contains('is-expanded') || false,
                 displayColors: false,
                 backgroundColor: 'rgba(20, 27, 30, 0.96)',
                 borderColor: colors.teal,
@@ -1798,10 +1827,22 @@
       requestAnimationFrame(() => chart?.resize());
     };
 
+    const setExpandedChartInteractions = (panel, expanded) => {
+      if (!panel?.classList.contains("bar-panel")) return;
+      const chart = window.Chart?.getChart(panel.querySelector("canvas"));
+      if (!chart) return;
+      chart.options.plugins.tooltip.enabled = expanded;
+      chart.canvas.style.cursor = "default";
+      chart.setActiveElements([]);
+      chart.tooltip?.setActiveElements([], { x: 0, y: 0 });
+      chart.update("none");
+    };
+
     const closeExpandedChart = () => {
       if (!expandedPanel) return;
       const button = expandedPanel.querySelector("[data-expand-chart]");
       expandedPanel.classList.remove("is-expanded");
+      setExpandedChartInteractions(expandedPanel, false);
       button?.setAttribute("aria-expanded", "false");
       if (button) button.setAttribute("aria-label", button.dataset.openLabel || "Enlarge chart");
       document.body.classList.remove("chart-modal-open");
@@ -1821,6 +1862,7 @@
       expandedPanel = panel;
       button.dataset.openLabel = button.getAttribute("aria-label");
       panel.classList.add("is-expanded");
+      setExpandedChartInteractions(panel, true);
       button.setAttribute("aria-expanded", "true");
       button.setAttribute("aria-label", "Close enlarged chart");
       document.body.classList.add("chart-modal-open");
