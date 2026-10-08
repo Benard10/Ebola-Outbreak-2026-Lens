@@ -198,16 +198,16 @@ The dictionary supplies coordinates when a case row does not contain them direct
 
 ## Apps Script API
 
-| Method   | Action               | Access         | Purpose                                                                                     |
-| -------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------- |
-| `GET`  | `ping`             | Public         | Lightweight health check, API version, data revision, refresh interval, and source registry |
-| `GET`  | `getData`          | Public         | Aggregated dashboard payload; add`fresh=1` to bypass the backend cache                    |
-| `GET`  | `getBoundaryStats` | Public         | Normalized statistics used for boundary matching                                            |
-| `POST` | `requestLoginCode` | Public, rate-limited | Emails a six-digit one-time code to the configured administrator                        |
-| `POST` | `verifyLoginCode`  | One-time code   | Returns a temporary 30-minute session token                                                 |
+| Method   | Action               | Access                 | Purpose                                                                                     |
+| -------- | -------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
+| `GET`  | `ping`             | Public                 | Lightweight health check, API version, data revision, refresh interval, and source registry |
+| `GET`  | `getData`          | Public                 | Aggregated dashboard payload; add`fresh=1` to bypass the backend cache                    |
+| `GET`  | `getBoundaryStats` | Public                 | Normalized statistics used for boundary matching                                            |
+| `POST` | `requestLoginCode` | Public, rate-limited   | Emails a six-digit one-time code to the configured administrator                            |
+| `POST` | `verifyLoginCode`  | One-time code          | Returns a temporary 30-minute session token                                                 |
 | `POST` | `getDictionary`    | Session token required | Returns the nested location dictionary                                                      |
-| `GET`  | `triggerSync`      | Token required | Runs the WHO import immediately                                                             |
-| `POST` | `addCase`          | Token required | Appends a field case and optionally updates the location dictionary                         |
+| `GET`  | `triggerSync`      | Token required         | Runs the WHO import immediately                                                             |
+| `POST` | `addCase`          | Token required         | Appends a field case and optionally updates the location dictionary                         |
 
 All API responses are JSON. Operational errors are returned as an `error` property.
 

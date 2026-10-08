@@ -1,0 +1,398 @@
+/* Responsive layout and accessible interaction states for the surveillance dashboard. */
+
+.panel-header {
+  align-items: center;
+  gap: 10px;
+}
+
+.chart-expand-btn,
+.info-trigger {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: #20272b;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.chart-expand-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+}
+
+.chart-expand-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.chart-expand-btn:hover,
+.chart-expand-btn:focus-visible,
+.chart-expand-btn[aria-expanded="true"],
+.info-trigger:hover,
+.info-trigger:focus-visible,
+.info-trigger[aria-expanded="true"] {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: rgba(84, 183, 166, 0.1);
+  outline: none;
+}
+
+.chart-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2990;
+  background: rgba(8, 12, 14, 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.chart-backdrop[hidden] {
+  display: none;
+}
+
+.panel.is-expanded {
+  position: fixed;
+  inset: clamp(16px, 5vw, 64px);
+  z-index: 3000;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  border-color: rgba(84, 183, 166, 0.65);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.68);
+}
+
+.panel.is-expanded .panel-header {
+  min-height: 48px;
+  padding-inline: 18px;
+  color: var(--text-main);
+}
+
+.panel.is-expanded .panel-body {
+  min-height: 0;
+  padding: clamp(12px, 2vw, 28px);
+}
+
+body.chart-modal-open {
+  overflow: hidden;
+}
+
+.risk-card {
+  position: relative;
+}
+
+.metrics-panel {
+  z-index: 5;
+  overflow: visible;
+}
+
+.metric-info {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 30;
+}
+
+.info-trigger {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font: 700 8px/1 var(--mono);
+  text-transform: none;
+}
+
+.metric-help {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 6px);
+  z-index: 30;
+  width: min(132px, calc(100vw - 42px));
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #171d20;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  color: var(--text-main);
+  font: 10px/1.35 var(--sans);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(3px, -50%);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.metric-help::after {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  border: 5px solid transparent;
+  border-right-color: #171d20;
+  transform: translateY(-50%);
+}
+
+.info-trigger:hover + .metric-help,
+.info-trigger:focus-visible + .metric-help,
+.info-trigger[aria-expanded="true"] + .metric-help {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(0, -50%);
+}
+
+@media (max-width: 980px) {
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  header {
+    height: auto;
+    min-height: 60px;
+    padding: 12px 16px;
+    gap: 14px;
+  }
+
+  .header-left {
+    min-width: 0;
+  }
+
+  .header-left h1 {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .header-right {
+    gap: 12px;
+  }
+
+  .stat-chip {
+    padding-left: 12px;
+  }
+
+  .stat-chip .val {
+    font-size: 16px;
+  }
+
+  .dashboard-grid {
+    flex: none;
+    height: auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    overflow: visible;
+  }
+
+  .map-panel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    min-height: 520px;
+  }
+
+  .metrics-panel,
+  .doughnut-panel {
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 230px;
+  }
+
+  .bar-panel,
+  .trend-panel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    min-height: 340px;
+  }
+
+  .update-bar {
+    position: relative;
+  }
+}
+
+@media (max-width: 640px) {
+  header {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .header-left h1 span {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .header-right {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    gap: 0;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+
+  .stat-chip {
+    min-width: 0;
+    padding: 0 5px;
+    text-align: center;
+  }
+
+  .stat-chip:first-child {
+    border-left: 0;
+  }
+
+  .stat-chip .val {
+    overflow: hidden;
+    font-size: clamp(14px, 4.5vw, 18px);
+    text-overflow: ellipsis;
+  }
+
+  .stat-chip .lbl {
+    font-size: 7px;
+  }
+
+  .dashboard-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .map-panel {
+    min-height: min(600px, 70svh);
+    order: 1;
+  }
+
+  .metrics-panel {
+    min-height: 190px;
+    order: 2;
+  }
+
+  .doughnut-panel {
+    min-height: 300px;
+    order: 3;
+  }
+
+  .bar-panel {
+    min-height: 360px;
+    order: 4;
+  }
+
+  .trend-panel {
+    min-height: 360px;
+    order: 5;
+  }
+
+  .panel-header {
+    min-height: 45px;
+    padding: 8px 10px;
+  }
+
+  .trend-panel .panel-header,
+  .bar-panel .panel-header {
+    flex-wrap: wrap;
+  }
+
+  .trend-controls {
+    gap: 6px;
+  }
+
+  .trend-controls select {
+    max-width: 118px;
+    min-height: 28px;
+  }
+
+  #trendRange {
+    display: none;
+  }
+
+  .map-mode-toggle {
+    right: 48px;
+    max-width: none;
+  }
+
+  .map-mode-toggle button,
+  .map-mode-toggle select {
+    min-height: 34px;
+    max-width: 126px;
+    font-size: 9px;
+  }
+
+  .map-legend {
+    bottom: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+    padding: 9px 10px;
+  }
+
+  .legend-item {
+    font-size: 10px;
+  }
+
+  #info-panel {
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    height: min(72%, 520px);
+    border-radius: 8px 8px 0 0;
+  }
+
+  .panel.is-expanded {
+    inset: 8px;
+    min-height: 0;
+    order: initial;
+  }
+
+  .panel.is-expanded .panel-header {
+    align-items: flex-start;
+  }
+
+  .panel.is-expanded .panel-body {
+    padding: 8px;
+  }
+
+  .update-bar {
+    gap: 8px;
+  }
+
+  .refresh-controls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 380px) {
+  .risk-grid {
+    gap: 6px;
+  }
+
+  .risk-card {
+    padding: 10px 6px;
+  }
+
+  .risk-card .value {
+    font-size: 20px;
+  }
+
+  .map-mode-toggle select,
+  .map-mode-toggle button {
+    max-width: 108px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-expand-btn,
+  .info-trigger,
+  .metric-help {
+    transition: none;
+  }
+}

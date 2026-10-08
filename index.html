@@ -188,6 +188,7 @@
   .hover-stats span:nth-child(even) { color: #fff; font-weight: 600; text-align: right; }
   .hover-hint { color: var(--teal); font-size: 8px; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
 </style>
+<link rel="stylesheet" href="dashboard-responsive.css?v=1.0"/>
 </head>
 <body>
 
@@ -256,7 +257,14 @@
     <div class="panel-header">Risk Analysis</div>
     <div class="panel-body">
       <div class="risk-grid">
-        <div class="risk-card high"><div class="value" id="risk-cfr">0%</div><div class="label">Confirmed CFR</div></div>
+        <div class="risk-card high">
+          <div class="metric-info">
+            <button class="info-trigger" type="button" aria-label="What is Confirmed CFR?" aria-expanded="false" aria-describedby="cfr-help">i</button>
+            <span class="metric-help" id="cfr-help" role="tooltip">Confirmed deaths ÷ confirmed cases, shown as a percentage.</span>
+          </div>
+          <div class="value" id="risk-cfr">0%</div>
+          <div class="label">Confirmed CFR</div>
+        </div>
         <div class="risk-card good"><div class="value" id="risk-recovery">0%</div><div class="label">Recovery Rate</div></div>
       </div>
     </div>
@@ -272,6 +280,9 @@
           <option value="all">All history</option>
         </select>
         <span id="trendRange">Awaiting history</span>
+        <button class="chart-expand-btn" type="button" data-expand-chart aria-label="Enlarge Daily Reports and Growth Curve chart" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"></circle><path d="m15 15 5 5M8 8h5M10.5 5.5v5"></path></svg>
+        </button>
       </div>
     </div>
     <div class="panel-body"><canvas id="trendChart"></canvas></div>
@@ -286,16 +297,26 @@
           <option value="10">Top 10</option>
           <option value="5">Top 5</option>
         </select>
+        <button class="chart-expand-btn" type="button" data-expand-chart aria-label="Enlarge Geographic Impact chart" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"></circle><path d="m15 15 5 5M8 8h5M10.5 5.5v5"></path></svg>
+        </button>
       </div>
     </div>
     <div class="panel-body"><canvas id="barChart"></canvas><div id="geoEmpty" class="empty-state" hidden></div></div>
   </div>
 
   <div class="panel doughnut-panel">
-    <div class="panel-header">Caseload Breakdown</div>
+    <div class="panel-header">
+      <span>Caseload Breakdown</span>
+      <button class="chart-expand-btn" type="button" data-expand-chart aria-label="Enlarge Caseload Breakdown chart" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"></circle><path d="m15 15 5 5M8 8h5M10.5 5.5v5"></path></svg>
+      </button>
+    </div>
     <div class="panel-body"><canvas id="doughnutChart"></canvas></div>
   </div>
 </div>
+
+<div class="chart-backdrop" id="chartBackdrop" hidden aria-hidden="true"></div>
 
 <div class="update-bar">
   <div class="status-badges" aria-live="polite">
@@ -1720,8 +1741,70 @@
   }
 
   function initializeDashboard() {
+    initializeDashboardInteractions();
     renderCachedDashboard();
     loadData();
+  }
+
+  function initializeDashboardInteractions() {
+    const backdrop = document.getElementById("chartBackdrop");
+    const expandButtons = document.querySelectorAll("[data-expand-chart]");
+    let expandedPanel = null;
+
+    const resizePanelChart = panel => {
+      const canvas = panel?.querySelector("canvas");
+      const chart = canvas ? window.Chart?.getChart(canvas) : null;
+      requestAnimationFrame(() => chart?.resize());
+    };
+
+    const closeExpandedChart = () => {
+      if (!expandedPanel) return;
+      const button = expandedPanel.querySelector("[data-expand-chart]");
+      expandedPanel.classList.remove("is-expanded");
+      button?.setAttribute("aria-expanded", "false");
+      if (button) button.setAttribute("aria-label", button.dataset.openLabel || "Enlarge chart");
+      document.body.classList.remove("chart-modal-open");
+      backdrop.hidden = true;
+      resizePanelChart(expandedPanel);
+      button?.focus();
+      expandedPanel = null;
+    };
+
+    expandButtons.forEach(button => button.addEventListener("click", () => {
+      const panel = button.closest(".panel");
+      if (expandedPanel === panel) {
+        closeExpandedChart();
+        return;
+      }
+      closeExpandedChart();
+      expandedPanel = panel;
+      button.dataset.openLabel = button.getAttribute("aria-label");
+      panel.classList.add("is-expanded");
+      button.setAttribute("aria-expanded", "true");
+      button.setAttribute("aria-label", "Close enlarged chart");
+      document.body.classList.add("chart-modal-open");
+      backdrop.hidden = false;
+      resizePanelChart(panel);
+    }));
+
+    backdrop.addEventListener("click", closeExpandedChart);
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeExpandedChart();
+    });
+
+    document.querySelectorAll(".info-trigger").forEach(button => {
+      button.addEventListener("click", event => {
+        event.stopPropagation();
+        const isOpen = button.getAttribute("aria-expanded") === "true";
+        document.querySelectorAll(".info-trigger[aria-expanded='true']").forEach(openButton => openButton.setAttribute("aria-expanded", "false"));
+        button.setAttribute("aria-expanded", String(!isOpen));
+      });
+    });
+    document.addEventListener("click", event => {
+      if (!event.target.closest(".metric-info")) {
+        document.querySelectorAll(".info-trigger[aria-expanded='true']").forEach(button => button.setAttribute("aria-expanded", "false"));
+      }
+    });
   }
 
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initializeDashboard); } else { initializeDashboard(); }
