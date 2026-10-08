@@ -2,7 +2,26 @@
 
 An interactive Ebola surveillance dashboard with a Google Sheets and Google Apps Script backend. It combines national WHO snapshots, field-entered case records, public daily situation-report datasets, and on-demand administrative boundaries.
 
-## What the application provides
+## Part A — The story behind the dashboard
+
+### Ebola is more than a case count
+
+Ebola disease is a rare but severe illness. It can spread when a person has direct contact with the blood or other body fluids of someone who is sick with Ebola, or with contaminated objects. A person does not spread Ebola before symptoms begin. Early symptoms can resemble malaria, typhoid fever, and other common infections, which makes rapid detection, testing, and clear communication especially important.
+
+Behind every number is a person, a family, a health worker, and a community making difficult decisions. During an outbreak, people need to know where cases are being reported, whether the situation is growing or slowing, and where response teams may need more attention. Early supportive care improves the chance of survival, while surveillance, contact tracing, infection prevention, safe and dignified burials, and community engagement work together to interrupt transmission. These points reflect guidance from the [World Health Organization](https://www.who.int/news-room/fact-sheets/detail/ebola-disease) and the [US Centers for Disease Control and Prevention](https://www.cdc.gov/ebola/about/).
+
+### What we are trying to communicate
+
+This dashboard turns scattered outbreak reports into one shared picture. It is designed to help a non-technical reader answer four practical questions:
+
+1. **What is happening?** Headline figures summarize confirmed and suspected cases, deaths, and recoveries.
+2. **Where is it happening?** The map shows the geographic pattern and relative intensity of reported cases.
+3. **How is the outbreak changing?** The growth curve shows whether reported cases are increasing and how quickly new reports are appearing.
+4. **How severe is the reported situation?** The confirmed case-fatality ratio and recovery rate provide context, while the geographic ranking highlights the most affected places.
+
+The dashboard is a communication and situational-awareness tool—not a diagnosis system and not a replacement for official public-health advice. Its purpose is to make the available data easier to see, compare, and discuss, while keeping the source date and reporting limitations visible.
+
+### What the application provides
 
 - Headline totals for confirmed cases, suspected cases, deaths, and recoveries.
 - Confirmed case-fatality and recovery-rate indicators.
@@ -13,7 +32,15 @@ An interactive Ebola surveillance dashboard with a Google Sheets and Google Apps
 - Geographic rankings at country, province, or health-zone level.
 - Automatic refresh, manual refresh, and cached startup data for rapid loading.
 
-## System architecture
+### Dashboard at a glance
+
+![Ebola Outbreak 2026 dashboard showing headline statistics, an outbreak map, risk indicators, geographic impact, and the growth curve](docs/dashboard-overview.png)
+
+*Desktop view captured from the dashboard with data displayed as of 6 October 2026. Values may change as the connected sources are updated.*
+
+## Part B — Technical guide
+
+### System architecture
 
 ```mermaid
 flowchart LR
@@ -37,14 +64,17 @@ The application has three main layers:
 2. **Configuration and data layer:** `app-config.js` provides one shared API URL, refresh intervals, map thresholds, and fallback source URLs.
 3. **Backend layer:** `Code.gs` reads and writes Google Sheets, imports WHO statistics, aggregates the API response, caches it, and exposes web-app endpoints.
 
-## Project structure
+### Project structure
 
 ```text
 .
 ├── index.html                     Main dashboard UI and browser-side logic
+├── dashboard-responsive.css       Responsive layout and accessible interaction states
 ├── app-config.js                  Shared frontend configuration and API URL
 ├── Code.gs                        Google Apps Script backend
 ├── README.md                      Architecture, operation, and deployment guide
+├── docs/
+│   └── dashboard-overview.png     README dashboard preview
 ├── data/
 │   └── gis/world/
 │       └── manifest.json          Country and ADM0-ADM4 boundary catalog
@@ -53,7 +83,7 @@ The application has three main layers:
     └── verify-live.mjs            Tests the deployed API and affected boundaries
 ```
 
-## Technology
+### Technology
 
 - HTML5, CSS3, and browser JavaScript
 - MapLibre GL JS for the interactive map
@@ -65,9 +95,9 @@ The application has three main layers:
 - WHO Alert and Response for national outbreak snapshots
 - INSP/INRB public CSV datasets for DRC daily and health-zone reporting
 
-## Front-to-back operation
+### Front-to-back operation
 
-### 1. Dashboard startup
+#### 1. Dashboard startup
 
 When `index.html` opens:
 
@@ -83,7 +113,7 @@ When `index.html` opens:
 6. If the revision changed, no cache exists, or the user selected **Refresh now**, it calls `GET ?action=getData` and renders the new payload.
 7. Daily history, DRC health-zone data, and detailed map geometry load asynchronously so they do not delay headline figures or controls.
 
-### 2. Backend aggregation
+#### 2. Backend aggregation
 
 `Code.gs` reads the `Cases` sheet and separates two record types:
 
@@ -103,7 +133,7 @@ The `getData` response contains:
 - `boundaryStats` — normalized local statistics for boundary matching; and
 - `map` — compact national, administrative, and point data for map rendering.
 
-### 3. Historical and subnational enrichment
+#### 3. Historical and subnational enrichment
 
 The browser fetches the INSP/INRB CSV sources listed in the runtime source registry:
 
@@ -116,7 +146,7 @@ National daily records are merged by date with the API timeline. When both sourc
 
 These public health-zone files currently provide ranking detail, but they do not provide a complete historical geographic snapshot series for every country. Geographic date playback therefore remains disabled to avoid presenting a misleading animation.
 
-### 4. Map pipeline
+#### 4. Map pipeline
 
 The basemap can initialize even when the Apps Script API is unavailable. Statistical overlays are added when data arrives.
 
@@ -129,7 +159,7 @@ The basemap can initialize even when the Apps Script API is unavailable. Statist
 
 The **ADM Auto** option selects detail according to zoom. ADM0-ADM4 can also be selected manually. New countries can be displayed without changing rendering code when their name can be resolved through the global boundary catalog.
 
-### 5. Charts and filters
+#### 5. Charts and filters
 
 - The country and province selectors create a filtered dashboard view without changing the stored source payload.
 - The growth chart supports the most recent 14 reports, 30 reports, or all available history.
@@ -141,7 +171,7 @@ The **ADM Auto** option selects detail according to zoom. ADM0-ADM4 can also be 
 - The caseload doughnut summarizes confirmed, suspected, and death figures.
 - Cases per 100,000 remains disabled until a reliable population dataset is added.
 
-### 6. Refresh and caching behavior
+#### 6. Refresh and caching behavior
 
 The system uses two complementary caches:
 
@@ -154,11 +184,11 @@ The **Refresh now** button bypasses the normal API cache with `fresh=1`. The **A
 
 If the backend is temporarily unavailable, the dashboard keeps showing the saved payload and clearly marks it as cached.
 
-## Google Sheets structure
+### Google Sheets structure
 
 The spreadsheet must contain these tabs.
 
-### `Cases`
+#### `Cases`
 
 The backend matches headers without regard to spaces or capitalization. The supported columns are:
 
@@ -184,7 +214,7 @@ The backend matches headers without regard to spaces or capitalization. The supp
 
 The WHO import adds any missing WHO-specific columns automatically.
 
-### `RegionsDictionary`
+#### `RegionsDictionary`
 
 | Column         | Purpose              |
 | -------------- | -------------------- |
@@ -196,7 +226,7 @@ The WHO import adds any missing WHO-specific columns automatically.
 
 The dictionary supplies coordinates when a case row does not contain them directly. New locations with valid coordinates can be upserted automatically.
 
-## Apps Script API
+### Apps Script API
 
 | Method   | Action               | Access                 | Purpose                                                                                     |
 | -------- | -------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
@@ -211,7 +241,7 @@ The dictionary supplies coordinates when a case row does not contain them direct
 
 All API responses are JSON. Operational errors are returned as an `error` property.
 
-## Configuration
+### Configuration
 
 Edit `app-config.js` for frontend settings:
 
@@ -225,16 +255,16 @@ Edit `app-config.js` for frontend settings:
 
 The source registry returned by the backend overrides matching frontend fallback values. This allows source URLs to be updated centrally after `Code.gs` is redeployed.
 
-## Setup and deployment
+### Setup and deployment
 
-### 1. Prepare Google Sheets
+#### 1. Prepare Google Sheets
 
 1. Open the Google Sheet associated with **Ebola Outbreak – Dynamic Map**.
 2. Create or verify the `Cases` and `RegionsDictionary` tabs.
 3. Add the headers documented above.
 4. Populate `RegionsDictionary` with known locations and coordinates when available.
 
-### 2. Deploy the backend
+#### 2. Deploy the backend
 
 1. Open the sheet's Apps Script project.
 2. Replace its backend source with `Code.gs`.
@@ -247,13 +277,13 @@ The source registry returned by the backend overrides matching frontend fallback
 9. Deploy as a Web App with access set to the intended audience.
 10. For later backend changes, edit the existing deployment and select **New version** so its `/exec` URL remains stable.
 
-### 3. Configure and host the frontend
+#### 3. Configure and host the frontend
 
 1. Put the deployed `/exec` URL in `app-config.js` as `apiBase`.
 2. Host `index.html`, `app-config.js`, and the `data` directory from the same static site root.
 3. Do not open the pages through `file://`; use a local or hosted HTTP server so browser fetches work consistently.
 
-### 4. Refresh the boundary catalog
+#### 4. Refresh the boundary catalog
 
 Run:
 
@@ -263,7 +293,7 @@ node scripts/prepare-boundaries.mjs
 
 This rebuilds `data/gis/world/manifest.json`. It catalogs worldwide ADM0-ADM4 availability without downloading and bundling every polygon.
 
-### 5. Verify a deployment
+#### 5. Verify a deployment
 
 Run:
 
@@ -273,14 +303,14 @@ node scripts/verify-live.mjs
 
 The verification script reads `apiBase` from `app-config.js`, checks `ping` and `getData`, summarizes the map payload, and confirms that ADM0 geometry is available for affected countries.
 
-## Operational notes
+### Operational notes
 
 - Increment `API_VERSION` when a backend response change should invalidate browser and Apps Script caches.
 - Update the existing Apps Script deployment after every `Code.gs` change; saving in the editor alone does not update the deployed web app.
 - A WHO page-layout change can break the HTML table parser. The import returns an error instead of deleting existing snapshots.
 - Country, province, and health-zone names are normalized for matching, but consistent spelling still produces the best boundary results.
 
-## Security considerations
+### Security considerations
 
 The backend uses emailed one-time codes and short-lived session tokens for administrative actions.
 
@@ -296,13 +326,13 @@ The backend uses emailed one-time codes and short-lived session tokens for admin
 - Use HTTPS hosting for the frontend.
 - For a public or multi-user deployment, replace the shared token with authenticated user identities and server-side authorization.
 
-## Current limitations
+### Current limitations
 
 - Population data is not included, so rates per 100,000 are unavailable.
 - Geographic playback is disabled until reliable historical province or health-zone snapshots exist.
 - Public subnational coverage is currently strongest for DRC; other countries depend on field records or future structured sources.
 - Browser-side CSV parsing assumes the current INSP/INRB column structure.
 
-## Disclaimer
+### Disclaimer
 
 This dashboard is a surveillance and analytical tool. Validate figures against the cited health authority before using them for operational or public-health decisions.
