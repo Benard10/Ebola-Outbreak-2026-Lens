@@ -233,11 +233,6 @@ The dictionary supplies coordinates when a case row does not contain them direct
 | `GET`  | `ping`             | Public                 | Lightweight health check, API version, data revision, refresh interval, and source registry |
 | `GET`  | `getData`          | Public                 | Aggregated dashboard payload; add`fresh=1` to bypass the backend cache                    |
 | `GET`  | `getBoundaryStats` | Public                 | Normalized statistics used for boundary matching                                            |
-| `POST` | `requestLoginCode` | Public, rate-limited   | Emails a six-digit one-time code to the configured administrator                            |
-| `POST` | `verifyLoginCode`  | One-time code          | Returns a temporary 30-minute session token                                                 |
-| `POST` | `getDictionary`    | Session token required | Returns the nested location dictionary                                                      |
-| `GET`  | `triggerSync`      | Token required         | Runs the WHO import immediately                                                             |
-| `POST` | `addCase`          | Token required         | Appends a field case and optionally updates the location dictionary                         |
 
 All API responses are JSON. Operational errors are returned as an `error` property.
 
@@ -268,14 +263,11 @@ The source registry returned by the backend overrides matching frontend fallback
 
 1. Open the sheet's Apps Script project.
 2. Replace its backend source with `Code.gs`.
-3. In **Project Settings → Script properties**, create `ADMIN_EMAIL` with the address that should receive one-time login codes.
-4. Optionally create `ADMIN_TOKEN` with a strong emergency or automation token.
-5. Save the project.
-6. Run `requestAdminLoginCode()` once from the editor if Google needs permission to send email. A code will be sent to `ADMIN_EMAIL`.
-7. Run `importExternalData()` once from the editor and approve the required Google permissions.
-8. Run `setupAutomation()` once. It removes existing `importExternalData` triggers and creates daily imports at approximately 06:00, 14:00, and 21:00 in the Apps Script project's configured timezone.
-9. Deploy as a Web App with access set to the intended audience.
-10. For later backend changes, edit the existing deployment and select **New version** so its `/exec` URL remains stable.
+3. Save the project.
+4. Run `importExternalData()` once from the editor and approve the required Google permissions.
+5. Run `setupAutomation()` once. It removes existing `importExternalData` triggers and creates daily imports at approximately 06:00, 14:00, and 21:00 in the Apps Script project's configured timezone.
+6. Deploy as a Web App with access set to the intended audience.
+7. For later backend changes, edit the existing deployment and select **New version** so its `/exec` URL remains stable.
 
 #### 3. Configure and host the frontend
 
@@ -309,22 +301,6 @@ The verification script reads `apiBase` from `app-config.js`, checks `ping` and 
 - Update the existing Apps Script deployment after every `Code.gs` change; saving in the editor alone does not update the deployed web app.
 - A WHO page-layout change can break the HTML table parser. The import returns an error instead of deleting existing snapshots.
 - Country, province, and health-zone names are normalized for matching, but consistent spelling still produces the best boundary results.
-
-### Security considerations
-
-The backend uses emailed one-time codes and short-lived session tokens for administrative actions.
-
-- Store the administrator address only as the `ADMIN_EMAIL` Apps Script Property.
-- If an emergency `ADMIN_TOKEN` is used, store it only in Apps Script Properties and never in browser code.
-- Never commit email addresses, tokens, login codes, or session tokens to a repository, example file, screenshot, or deployment note.
-- Login codes expire after 10 minutes, allow at most five incorrect attempts, and are limited to one request per minute and five requests per hour.
-- Session tokens expire after 30 minutes.
-- Email delivery is subject to the Apps Script account's Mail service quota.
-- The deployed Apps Script `/exec` URL and public source URLs are intentionally present in frontend configuration because browsers must be able to request them; they are identifiers, not authentication secrets.
-- Rotate the token if it has been exposed.
-- Restrict the Web App audience where operational requirements allow it.
-- Use HTTPS hosting for the frontend.
-- For a public or multi-user deployment, replace the shared token with authenticated user identities and server-side authorization.
 
 ### Current limitations
 
