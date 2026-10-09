@@ -196,6 +196,7 @@ body.chart-modal-open {
   .map-panel {
     grid-column: 1 / -1;
     grid-row: auto;
+    height: 520px;
     min-height: 520px;
   }
 
@@ -203,6 +204,7 @@ body.chart-modal-open {
   .doughnut-panel {
     grid-column: auto;
     grid-row: auto;
+    height: 230px;
     min-height: 230px;
   }
 
@@ -210,6 +212,7 @@ body.chart-modal-open {
   .trend-panel {
     grid-column: 1 / -1;
     grid-row: auto;
+    height: 340px;
     min-height: 340px;
   }
 
@@ -269,26 +272,33 @@ body.chart-modal-open {
   }
 
   .map-panel {
-    min-height: min(600px, 70svh);
+    height: 70vh;
+    height: min(600px, 70svh);
+    min-height: 0;
+    flex-shrink: 0;
     order: 1;
   }
 
   .metrics-panel {
+    height: 190px;
     min-height: 190px;
     order: 2;
   }
 
   .doughnut-panel {
+    height: 300px;
     min-height: 300px;
     order: 3;
   }
 
   .bar-panel {
+    height: 360px;
     min-height: 360px;
     order: 4;
   }
 
   .trend-panel {
+    height: 360px;
     min-height: 360px;
     order: 5;
   }

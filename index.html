@@ -60,7 +60,7 @@
   .empty-state { position: absolute; inset: 12px; display: grid; place-items: center; text-align: center; color: var(--text-muted); font: 10px/1.5 var(--mono); }
 
   .map-panel { grid-column: 1; grid-row: 1 / 4; min-height: 0; }
-  .map-panel > #map { width: 100%; height: 100%; z-index: 1; background: #1e2326; display: block; }
+  .map-panel > #map { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; background: #1e2326; display: block; }
   .map-panel:fullscreen, .map-panel:-webkit-full-screen { width: 100vw; height: 100vh; border: 0; border-radius: 0; background: var(--bg-dark); }
 
   .maplibregl-map :focus { outline: none !important; }
@@ -188,7 +188,7 @@
   .hover-stats span:nth-child(even) { color: #fff; font-weight: 600; text-align: right; }
   .hover-hint { color: var(--teal); font-size: 8px; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
 </style>
-<link rel="stylesheet" href="dashboard-responsive.css?v=1.0"/>
+<link rel="stylesheet" href="dashboard-responsive.css?v=1.1"/>
 </head>
 <body>
 
@@ -538,6 +538,13 @@
       map.addControl(new maplibregl.FullscreenControl({ container: document.querySelector(".map-panel") }), "top-right");
       map.addControl(new FullExtentControl(), "top-right");
       map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+      // Breakpoint, orientation and fullscreen changes can resize the panel
+      // independently of the window. Keep the WebGL canvas in sync.
+      if (window.ResizeObserver) {
+        const mapResizeObserver = new ResizeObserver(() => map.resize());
+        mapResizeObserver.observe(document.getElementById("map"));
+        map.once("remove", () => mapResizeObserver.disconnect());
+      }
       mapReadyPromise = new Promise(resolve => {
         map.once("load", () => {
           map.on("zoomend", () => {
