@@ -32,6 +32,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local QA and browser captures
+.qa/
 *-qa.png
 *-qa.jpg
 screenshot*.png

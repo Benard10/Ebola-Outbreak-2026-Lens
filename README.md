@@ -68,22 +68,86 @@ The application has three main layers:
 
 ```text
 .
-├── index.html                     Main dashboard UI and browser-side logic
-├── dashboard-responsive.css       Responsive layout and accessible interaction states
-├── app-config.js                  Shared frontend configuration and API URL
-├── Code.gs                        Google Apps Script backend
-├── README.md                      Architecture, operation, and deployment guide
+├── index.html                   Main dashboard markup
+├── dashboard.css                Base dashboard styling
+├── dashboard.js                 Browser-side dashboard logic
+├── dashboard-charts.js          Interactive chart rendering and exports
+├── dashboard-charts.css         Chart controls and responsive chart styling
+├── map-ui.js                    Map options and background label presentation
+├── map-ui.css                   Map toolbar and options styling
+├── dashboard-responsive.css     Responsive layout and accessible interaction states
+├── app-config.js                Shared frontend configuration and API URL
+├── Code.gs                      Google Apps Script backend (local, excluded from Git)
+├── README.md                    Architecture, operation, and deployment guide
 ├── docs/
 │   └── dashboard-overview.png     README dashboard preview
 ├── data/
 │   └── gis/world/
 │       └── manifest.json          Country and ADM0-ADM4 boundary catalog
 └── scripts/
-    ├── prepare-boundaries.mjs     Rebuilds the boundary manifest
-    └── verify-live.mjs            Tests the deployed API and affected boundaries
+    ├── prepare-boundaries.mjs   Rebuilds the boundary manifest
+    ├── test-charts.cjs          Browser regression checks with sample data
+    └── verify-live.mjs          Tests the deployed API and affected boundaries
 ```
 
 ### Technology
+
+The interactive chart layer loads after `dashboard.js`. Chart.js is pinned to
+4.4.8; Hammer.js 2.0.8 and chartjs-plugin-zoom 2.0.1 add optional zoom/pan.
+If the zoom plugin fails to load, the other chart controls remain available.
+The doughnut shows Confirmed, Suspected, and Probable classifications; deaths
+are shown separately because they overlap those classifications. The growth
+summary extrapolates reported counts and can reflect reporting delays or corrections.
+
+### Dashboard controls and reporting dates
+
+Charts update in place, retaining hidden series/slices and compatible zoom ranges.
+PNG/CSV exports, sorting, log scale, and geographic drilling are available through
+the chart controls. Country/province selectors provide keyboard drilling; the
+buttons under the doughnut toggle slices, and the deaths button changes the map metric.
+On compact screens these actions are available in the chart options menu.
+**Charts view** expands the charts across the map area; **Back to map** restores
+the overview. Individual charts can also be enlarged. Portrait and landscape
+phone layouts fit the viewport, with compact controls for smaller screens.
+
+The footer distinguishes **Data as of**, the reporting date supplied by the
+source, from **Last checked**, the last successful dashboard check. Cached data
+keeps its recorded check time; an unsuccessful check does not advance it.
+The timestamp's accessible label/title includes the full local date and timezone.
+Phone layouts prioritize these dates and shorten long source names visually.
+
+The map toolbar keeps metric/country/province filters visible. **Map options**
+contains choropleth/point mode, administrative detail, detailed background labels,
+and camera reset. **Fit affected areas** uses the current geography's loaded
+outbreak bounds with padding adapted to the toolbar, legend, and map size.
+Background label cleanup only adjusts known basemap layers and preserves the
+surveillance overlays. Affected countries have small centred labels in choropleth
+mode. Click an area or point to open its details; hover popups are disabled.
+Map fullscreen remains available.
+Filters occupy a separate row above the map. Map options and location details
+close one another when opened. Background data refreshes preserve the map camera;
+changing geography requests a new fit.
+
+### Browser verification
+
+Run the deterministic browser checks with:
+
+```powershell
+npm.cmd install --prefix .qa --no-save --package-lock=false playwright
+node scripts/test-charts.cjs
+```
+
+The checks require installed Microsoft Edge and access to the chart/map CDNs. They
+use sample data with live API startup disabled, and cover enabled/blocked zoom,
+refresh state, historical corrections, filters, expansion, exports, keyboard menus,
+and mobile layout. Map checks use real MapLibre with sample GeoJSON to verify
+fit/reset, detailed-label restoration, overlay preservation, and map options.
+They do not validate the live API or map data.
+Reporting-date checks cover successful checks, failed checks, and cached timestamps.
+Phone sizes tested include 320×568, 360×640, 390×844, 412×915, and 568×320.
+Dependencies and generated screenshots in `.qa/` are local-only and ignored by Git.
+
+### Technology stack
 
 - HTML5, CSS3, and browser JavaScript
 - MapLibre GL JS for the interactive map
@@ -272,7 +336,7 @@ The source registry returned by the backend overrides matching frontend fallback
 #### 3. Configure and host the frontend
 
 1. Put the deployed `/exec` URL in `app-config.js` as `apiBase`.
-2. Host `index.html`, `app-config.js`, and the `data` directory from the same static site root.
+2. Host `index.html`, `app-config.js`, `dashboard.js`, `dashboard-charts.js`, `map-ui.js`, `dashboard.css`, `dashboard-responsive.css`, `dashboard-charts.css`, `map-ui.css`, and the `data` directory from the same static site root. Deploy these together so the HTML references match the installed assets. No build step is required.
 3. Do not open the pages through `file://`; use a local or hosted HTTP server so browser fetches work consistently.
 
 #### 4. Refresh the boundary catalog
