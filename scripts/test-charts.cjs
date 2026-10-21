@@ -94,9 +94,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#adminLevel').isVisible(), true);
       assert.equal(await page.evaluate(() => map.getPaintProperty('cases-fill-fixture', 'fill-opacity')), .7);
       assert.ok(Array.isArray(await page.evaluate(() => map.getPaintProperty('place_city', 'text-opacity'))));
-      await page.locator('#mapDetailedLabels').check();
-      assert.equal(await page.evaluate(() => map.getPaintProperty('place_city', 'text-opacity')), .8);
-      await page.locator('#mapDetailedLabels').uncheck();
+      assert.equal(await page.locator('#mapDetailedLabels').count(), 0);
       await page.locator('#resetMapView').click();
       assert.equal(await page.evaluate(() => map.getZoom()), 4);
       await page.locator('#fitAffectedAreas').click();
@@ -113,7 +111,7 @@ const server = http.createServer((req, res) => {
         flushCountryBoundaries();
       });
       await page.waitForTimeout(250);
-      assert.equal(await page.locator('.map-country-label').textContent(), 'Uganda');
+      assert.equal(await page.locator('.map-country-label').count(), 0);
       const refreshCamera = await page.evaluate(() => {
         prepareMapScope(currentDashboardData);
         hasInitialFit = true;
@@ -143,9 +141,22 @@ const server = http.createServer((req, res) => {
       await page.mouse.click(mapClick.x, mapClick.y);
       assert.equal(await page.locator('#info-panel').isVisible(), true);
       assert.equal(await page.locator('#info-title').textContent(), 'Uganda');
-      await page.getByRole('button', { name: 'Close location details' }).click();
+      assert.equal(await page.locator('#countryFilter').inputValue(), 'Uganda');
+      assert.deepEqual(await page.evaluate(() => chartInstances.doughnut.data.datasets[0].data), [120, 10, 3]);
+      assert.equal(await page.locator('#hdr-confirmed').textContent(), '120');
+      assert.deepEqual(await page.evaluate(() => chartInstances.trend.data.datasets.find(dataset => dataset.label === 'Cumulative reported cases').data), await page.evaluate(() => {
+        const count = document.getElementById('trendWindow').value;
+        const rows = count === 'all' ? currentDashboardData.timeline : currentDashboardData.timeline.slice(-Number(count));
+        return rows.map(row => (row.confirmed || 0) + (row.suspected || 0) + (row.probable || 0));
+      }));
+      assert.match(await page.locator('#trendRange').textContent(), /All countries/);
+      await page.getByRole('button', { name: 'Total cases: reset to all countries' }).click();
+      assert.equal(await page.locator('#countryFilter').inputValue(), '');
+      assert.deepEqual(await page.evaluate(() => chartInstances.doughnut.data.datasets[0].data), [140, 15, 5]);
+      assert.ok(await page.evaluate(() => chartInstances.trend.data.labels.length > 0));
+      assert.equal(await page.locator('#info-panel').isVisible(), false);
       await page.evaluate(() => { setMapMode('points'); });
-      assert.equal(await page.locator('.map-country-label').isVisible(), false);
+      assert.equal(await page.locator('.map-country-label').count(), 0);
       await page.evaluate(() => {
         setMapMode('choropleth'); pendingCountryBoundaries.clear(); flushCountryBoundaries();
       });

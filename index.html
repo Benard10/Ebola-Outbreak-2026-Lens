@@ -12,14 +12,15 @@
 
 <link rel="stylesheet" href="dashboard.css?v=1.1"/>
 <link rel="stylesheet" href="dashboard-responsive.css?v=1.1"/>
-<link rel="stylesheet" href="dashboard-charts.css?v=1.5"/>
-<link rel="stylesheet" href="map-ui.css?v=1.3"/>
+<link rel="stylesheet" href="dashboard-charts.css?v=1.8"/>
+<link rel="stylesheet" href="map-ui.css?v=1.4"/>
 </head>
 <body>
 
 <header>
   <div class="header-left">
     <h1>Ebola Outbreak 2026 | <span>Biological Surveillance</span></h1>
+    <button type="button" id="resetCountrySelection" class="refresh-btn" aria-label="Total cases: reset to all countries" aria-pressed="true" title="Show all countries"><span id="hdr-total">0</span> Total cases</button>
     <button type="button" id="chartsViewToggle" class="refresh-btn charts-view-toggle" aria-pressed="false" aria-controls="dashboardGrid">Charts view</button>
   </div>
   <div class="header-right">
@@ -61,7 +62,6 @@
         <div class="map-options-content">
           <div class="map-display-modes" role="group" aria-label="Map display"></div>
           <label class="map-admin-label">Boundary detail</label>
-          <label class="map-label-toggle"><input type="checkbox" id="mapDetailedLabels"> Show detailed background labels</label>
           <button type="button" id="resetMapView" title="Restore the overview camera without changing filters">Reset view</button>
         </div>
       </details>
@@ -77,13 +77,14 @@
     <div id="info-panel">
       <button type="button" class="close-btn" aria-label="Close location details" onclick="document.getElementById('info-panel').style.display='none'">&times;</button>
       <h2 id="info-title">Boundary</h2>
-      <div class="info-row"><span class="info-label">Province</span><span id="info-province">---</span></div>
-      <div class="info-row"><span class="info-label">Total Cases</span><span id="info-total">0</span></div>
+      <div class="info-row info-location"><span class="info-label">Location</span><span id="info-province">---</span></div>
+      <div class="info-stats">
+      <div class="info-row info-total-card"><span class="info-label">Total Cases</span><span id="info-total">0</span></div>
       <div class="info-row"><span class="info-label">Confirmed</span><span id="info-conf" style="color:var(--teal)">0</span></div>
       <div class="info-row"><span class="info-label">Suspected</span><span id="info-susp" style="color:var(--yellow)">0</span></div>
       <div class="info-row"><span class="info-label">Deaths</span><span id="info-death" style="color:var(--red)">0</span></div>
       <div class="info-row"><span class="info-label">Recovered</span><span id="info-rec" style="color:var(--blue)">0</span></div>
-      <div class="info-row"><span class="info-label">Status</span><span id="info-status">ACTIVE</span></div>
+      </div>
       <div class="info-list">
         <div class="info-list-title"></div>
         <div id="info-zones"></div>
@@ -173,8 +174,8 @@
 <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="app-config.js"></script>
-<script src="dashboard.js?v=1.3"></script>
-<script src="map-ui.js?v=1.2"></script>
-<script src="dashboard-charts.js?v=1.5"></script>
+<script src="dashboard.js?v=1.8"></script>
+<script src="map-ui.js?v=1.3"></script>
+<script src="dashboard-charts.js?v=1.9"></script>
 </body>
 </html>

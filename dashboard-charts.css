@@ -176,7 +176,7 @@
 
 @media (min-width: 981px) {
   .dashboard-grid {
-    grid-template-columns: minmax(0, 2.3fr) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 3.2fr) minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
@@ -328,3 +328,6 @@ body { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
   .charts-view .bar-panel { grid-column: 1; grid-row: 2; }
   .charts-view .trend-panel { grid-column: 2; grid-row: 2; }
 }
+
+#resetCountrySelection { flex-shrink: 0; white-space: nowrap; }
+@media (max-width: 640px) { #resetCountrySelection { font-size: 7px; padding: 3px; } }

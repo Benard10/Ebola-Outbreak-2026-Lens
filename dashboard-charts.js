@@ -1,8 +1,8 @@
 /*
  * dashboard-charts.js — interactive chart layer for the Ebola surveillance dashboard.
  *
- * Loads AFTER dashboard.js and replaces only the front-end `renderCharts(data)`
- * function. Nothing in the data layer is touched: loadData, API calls, caching,
+ * Loads AFTER dashboard.js and supplies the front-end chart renderer for the
+ * dashboard. Nothing in the data layer is touched: loadData, API calls, caching,
  * history/subnational merging, filtering and the map code all stay exactly as
  * they are in dashboard.js. This file only reads the data those functions
  * already produce.
@@ -321,7 +321,7 @@
         : timeline.length === 1 ? `${timeline[0].date} · more snapshots needed` : 'No dated snapshots';
       const g = growthSummary(timeline, cum);
       if (g) text += ` · ${g}`;
-      if (data.geographyFilter) text += ' · national history';
+      text += ' | All countries';
       range.textContent = text;
       range.title = text;
     }
@@ -339,7 +339,7 @@
       g.addColorStop(1, 'rgba(84,183,166,0.02)');
       return g;
     };
-    const shortNames = ['New', 'Cases', 'Deaths', '7-rpt avg'];
+    const shortNames = ['New cases', 'Total cases', 'Deaths', '7-report average'];
 
     const signature = JSON.stringify([timeline.map(t => t.date), cum, fresh, avg, growth, deaths, prefs.trendLog, ZOOM_AVAILABLE]);
     const chart = mountChart('trend', canvas, signature, () => ({
@@ -388,10 +388,26 @@
           yDaily: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, maxTicksLimit: 4 } }
         },
         plugins: {
-          legend: { display: canvas.parentElement.clientWidth >= 250 || canvas.parentElement.clientHeight >= 130, position: 'top', align: 'start', labels: {
-            boxWidth: 8, boxHeight: 8, usePointStyle: true, padding: 6, font: { size: 9 },
+          legend: { display: canvas.parentElement.clientWidth >= 250 || canvas.parentElement.clientHeight >= 130, position: 'top', align: 'start',
+            onHover: (event, item, legend) => {
+              const average = item.datasetIndex === 3;
+              legend.chart.canvas.style.cursor = average ? 'help' : 'pointer';
+              if (average) legend.chart.canvas.title = 'Average new cases over the last 7 reports.';
+              else legend.chart.canvas.removeAttribute('title');
+            },
+            onLeave: (event, item, legend) => {
+              legend.chart.canvas.style.cursor = 'default';
+              legend.chart.canvas.removeAttribute('title');
+            },
+            labels: {
+            boxWidth: 14, boxHeight: 7, usePointStyle: true, pointStyleWidth: 14, padding: 5, font: { size: 9 },
             generateLabels: c => Chart.defaults.plugins.legend.labels.generateLabels(c).map(item => ({
-              ...item, text: c.width < 650 ? shortNames[item.datasetIndex] : item.text
+              ...item, text: c.width < 400 ? ['New', 'Cases', 'Deaths', '7-report avg'][item.datasetIndex] : c.width < 650 ? shortNames[item.datasetIndex] : item.text,
+              pointStyle: item.datasetIndex === 0 ? 'rect' : 'line',
+              fillStyle: item.datasetIndex === 0 ? colors.yellow : 'transparent',
+              strokeStyle: item.datasetIndex === 0 ? colors.yellow : c.data.datasets[item.datasetIndex].borderColor,
+              lineWidth: item.datasetIndex === 0 ? 0 : 2,
+              lineDash: c.data.datasets[item.datasetIndex].borderDash || []
             }))
           } },
           trendMarkers: { peak: peakIndex },
@@ -637,14 +653,14 @@
     return chart;
   }
 
-  /* ---------- the replacement renderCharts ---------- */
-  function renderCharts(data) {
+  /* ---------- shared interactive chart renderer ---------- */
+  function renderInteractiveCharts(data) {
     if (!window.Chart || !data) return;
     renderTrend(data);
     renderBar(data);
     renderDoughnut(data);
   }
-  window.renderCharts = renderCharts;
+  window.renderDashboardCharts = renderInteractiveCharts;
 
   /* ---------- export helpers ---------- */
   function stamp() { return new Date().toISOString().slice(0, 10); }

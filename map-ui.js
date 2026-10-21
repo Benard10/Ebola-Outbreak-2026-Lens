@@ -31,14 +31,11 @@
     content.appendChild(note);
     playback.remove();
   }
-  const originals = new Map();
   // Only these background layers are adjusted; surveillance layers are untouched.
   const country = /^place_country_/;
   const local = /^(place_(other|suburb|village|town|city|city_large|state)|water_name|highway_name_other|highway_name_motorway)$/;
-  window.applyMapPresentation = (styleReloaded = false) => {
+  window.applyMapPresentation = () => {
     if (!map) return;
-    if (styleReloaded) originals.clear();
-    const detailed = document.getElementById('mapDetailedLabels').checked;
     (map.getStyle()?.layers || []).forEach(layer => {
       let property, cleaned;
       if (layer.type === 'symbol' && (country.test(layer.id) || local.test(layer.id))) {
@@ -50,11 +47,9 @@
         property = 'line-opacity';
         cleaned = ['interpolate', ['linear'], ['zoom'], 3, .12, 8, .4];
       } else return;
-      if (!originals.has(layer.id)) originals.set(layer.id, map.getPaintProperty(layer.id, property) ?? null);
-      map.setPaintProperty(layer.id, property, detailed ? originals.get(layer.id) : cleaned);
+      map.setPaintProperty(layer.id, property, cleaned);
     });
   };
-  document.getElementById('mapDetailedLabels').addEventListener('change', () => window.applyMapPresentation());
   if (map?.isStyleLoaded()) window.applyMapPresentation();
   function announce(text) { document.getElementById('mapActionStatus').textContent = text; }
   document.getElementById('fitAffectedAreas').addEventListener('click', () => {

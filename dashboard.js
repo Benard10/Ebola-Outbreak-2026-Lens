@@ -37,7 +37,6 @@
   let dailyHistoryLoadedAt = 0;
   let subnationalPromise = null;
   let subnationalLoadedAt = 0;
-  const countryLabels = new Map();
 
   const colors = { teal: '#54b7a6', red: '#e4605e', yellow: '#e9c46a', blue: '#4a90e2', grid: '#364146', text: '#8493a5' };
   const mapColors = { high: '#ef4444', moderate: '#f59e0b', low: '#38bdf8', none: '#4b5563' };
@@ -267,9 +266,8 @@
     document.getElementById('info-susp').innerText = suspected.toLocaleString();
     document.getElementById('info-death').innerText = deaths.toLocaleString();
     document.getElementById('info-rec').innerText = recovered.toLocaleString();
-    document.getElementById('info-status').innerText = item.status || 'NO CASES REPORTED';
     const zonesContainer = document.getElementById('info-zones');
-    const zones = Array.isArray(item.zones) ? item.zones : (item.name ? [item] : []);
+    const zones = Array.isArray(item.zones) ? item.zones : [];
     const infoList = document.querySelector('.info-list');
     const listTitle = document.querySelector('.info-list-title');
     if (infoList) infoList.style.display = (zones.length > 0) ? 'block' : 'none';
@@ -564,8 +562,25 @@
     });
   }
 
+  function selectMapCountry(item) {
+    const select = document.getElementById('countryFilter');
+    const country = recordCountry(item);
+    const iso = item.country_iso || item.countryIso || resolveCountryIso(country);
+    const option = Array.from(select.options).find(option => option.value && (
+      normalizeCountryName(option.value) === normalizeCountryName(country) ||
+      (iso && resolveCountryIso(option.value) === iso)
+    ));
+    if (!option) return;
+    select.value = option.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   function bindBoundaryInteraction(layerId) {
-    map.on("click", layerId, event => showInfoPanel(mapFeatureProperties(event.features[0].properties)));
+    map.on("click", layerId, event => {
+      const item = mapFeatureProperties(event.features[0].properties);
+      selectMapCountry(item);
+      showInfoPanel(item);
+    });
     map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", layerId, () => {
       map.getCanvas().style.cursor = "";
@@ -598,31 +613,6 @@
     bindBoundaryInteraction(fillId);
   }
 
-  function syncCountryLabels() {
-    const active = new Set();
-    pendingCountryBoundaries.forEach((geojson, iso3) => {
-      const feature = geojson.features.find(f => f.properties?.label_primary !== false) || geojson.features[0];
-      const coordinates = interiorPoint(feature);
-      if (!coordinates) return;
-      const name = feature.properties?.country_name || feature.properties?.name || iso3;
-      active.add(iso3);
-      let marker = countryLabels.get(iso3);
-      if (!marker) {
-        const element = document.createElement('span');
-        element.className = 'map-country-label';
-        marker = new maplibregl.Marker({ element, anchor: 'center' });
-        countryLabels.set(iso3, marker);
-      }
-      marker.getElement().textContent = name;
-      marker.getElement().title = name;
-      marker.getElement().hidden = mapMode !== 'choropleth';
-      marker.setLngLat(coordinates).addTo(map);
-    });
-    countryLabels.forEach((marker, iso3) => {
-      if (!active.has(iso3)) { marker.remove(); countryLabels.delete(iso3); }
-    });
-  }
-
   function flushCountryBoundaries() {
     const activeCodes = new Set(pendingCountryBoundaries.keys());
     renderedCountryCodes.forEach(iso3 => {
@@ -630,7 +620,6 @@
     });
     pendingCountryBoundaries.forEach((geojson, iso3) => upsertCountryBoundary(iso3, geojson));
     renderedCountryCodes = activeCodes;
-    syncCountryLabels();
     map.triggerRepaint();
   }
 
@@ -778,7 +767,6 @@
     if (!map) return;
     const showBoundaries = mapMode === "choropleth";
     const showPoints = mapMode === "points";
-    countryLabels.forEach(marker => { marker.getElement().hidden = !showBoundaries; });
     (map.getStyle()?.layers || []).forEach(layer => {
       const id = layer.id;
       if (id.startsWith("cases-") || ["admin-boundary-fill", "admin-boundary-line"].includes(id)) {
@@ -940,165 +928,7 @@
   }
 
   function renderCharts(data) {
-    if (!window.Chart) return;
-    const ctxTrend = document.getElementById('trendChart'), ctxBar = document.getElementById('barChart'), ctxDoughnut = document.getElementById('doughnutChart');
-    if (ctxTrend && data.timeline) {
-      const fullTimeline = [...data.timeline].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-      const selectedWindow = document.getElementById("trendWindow")?.value || "14";
-      const timeline = selectedWindow === "all" ? fullTimeline : fullTimeline.slice(-Number(selectedWindow));
-      const cumulativeCases = timeline.map(t => (Number(t.confirmed) || 0) + (Number(t.suspected) || 0) + (Number(t.probable) || 0));
-      const newlyReported = cumulativeCases.map((value, index) => index === 0 ? null : Math.max(0, value - cumulativeCases[index - 1]));
-      const range = document.getElementById("trendRange");
-      if (range) {
-        const filterNote = data.geographyFilter ? " · national history" : "";
-        range.textContent = (timeline.length > 1
-          ? `${timeline[0].date} → ${timeline[timeline.length - 1].date} · ${timeline.length}/${fullTimeline.length} reports`
-          : timeline.length === 1 ? `${timeline[0].date} · more snapshots needed` : "No dated snapshots") + filterNote;
-      }
-      if(chartInstances.trend) chartInstances.trend.destroy();
-      chartInstances.trend = new Chart(ctxTrend.getContext('2d'), {
-        type: 'line',
-        data: {
-          labels: timeline.map(t => t.date),
-          datasets: [
-            {
-              type: 'bar', label: 'New since prior report', data: newlyReported,
-              backgroundColor: 'rgba(233,196,106,0.28)', borderColor: colors.yellow,
-              borderWidth: 0, borderRadius: 2, maxBarThickness: 18, yAxisID: 'yDaily', order: 2
-            },
-            {
-              type: 'line', label: 'Cumulative reported cases', data: cumulativeCases,
-              borderColor: colors.teal, backgroundColor: 'rgba(84,183,166,0.13)', borderWidth: 2.5,
-              pointRadius: 0, pointHoverRadius: 4, tension: 0.2, fill: true,
-              yAxisID: 'y', order: 1
-            },
-            { type: 'line', label: 'Cumulative deaths', data: timeline.map(t => Number(t.deaths) || 0), borderColor: colors.red, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.2, fill: false, yAxisID: 'y', order: 1, hidden: true }
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          scales: {
-            x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 7, maxRotation: 0 } },
-            y: { beginAtZero: false, position: 'left', ticks: { precision: 0, maxTicksLimit: 5 } },
-            yDaily: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, maxTicksLimit: 4 } }
-          },
-          plugins: {
-            legend: { display: true, position: 'top', align: 'start', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, padding: 10, font: { size: 9 } } },
-            tooltip: {
-              position: 'growthLine',
-              xAlign: 'left',
-              yAlign: 'bottom',
-              caretPadding: 20,
-              padding: 7,
-              titleMarginBottom: 3,
-              bodySpacing: 2,
-              boxWidth: 7,
-              boxHeight: 7,
-              usePointStyle: true,
-              titleFont: { size: 10, weight: '600' },
-              bodyFont: { size: 9 },
-              callbacks: {
-                title: items => items.length ? `Report date: ${items[0].label}` : '',
-                label: item => {
-                  const names = { 0: 'New', 1: 'Cases', 2: 'Deaths' };
-                  return ` ${names[item.datasetIndex] || item.dataset.label}: ${Number(item.raw || 0).toLocaleString()}`;
-                }
-              }
-            }
-          }
-        }
-      });
-    }
-    if (ctxBar && data.provinces) {
-      if(chartInstances.bar) chartInstances.bar.destroy();
-      const geography = geographicRanking(data);
-      const geographicStats = geography.records;
-      document.getElementById("geoTitle").textContent = `Geographic Impact — ${geography.scope}`;
-      const metric = activeMapMetric();
-      const geoEmpty = document.getElementById("geoEmpty");
-      const metricAvailable = !geography.availableMetrics || geography.availableMetrics.includes(metric.key);
-      const hasGeography = geographicStats.length > 0 && metricAvailable;
-      ctxBar.hidden = !hasGeography;
-      geoEmpty.hidden = hasGeography;
-      geoEmpty.textContent = hasGeography ? "" : metricAvailable
-        ? "No structured public subnational dataset is available for this country."
-        : `${metric.label} is not reported in the available health-zone dataset.`;
-      const geoLimit = document.getElementById("geoLimit")?.value || "all";
-      const ranked = [...geographicStats].sort((a,b) => mapMetricValue(b, metric) - mapMetricValue(a, metric));
-      const topP = geoLimit === "all" ? ranked : ranked.slice(0, Number(geoLimit));
-      if (hasGeography) {
-        chartInstances.bar = new Chart(ctxBar.getContext('2d'), {
-          type: 'bar',
-          data: {
-            labels: topP.map(p => geographicLabel(p, geography.scope)),
-            datasets: [{
-              label: metric.label,
-              data: topP.map(p => mapMetricValue(p, metric)),
-              backgroundColor: colors.teal,
-              hoverBackgroundColor: '#72cbbd',
-              borderRadius: 2
-            }]
-          },
-          options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'nearest', axis: 'y', intersect: false },
-            onHover: (event, elements, chart) => {
-              const hoverEnabled = Boolean(chart.options.plugins.tooltip.enabled);
-              chart.canvas.style.cursor = hoverEnabled && elements.length ? 'pointer' : 'default';
-            },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                enabled: document.querySelector('.bar-panel')?.classList.contains('is-expanded') || false,
-                displayColors: false,
-                backgroundColor: 'rgba(20, 27, 30, 0.96)',
-                borderColor: colors.teal,
-                borderWidth: 1,
-                cornerRadius: 6,
-                caretPadding: 8,
-                padding: 10,
-                titleColor: '#ffffff',
-                bodyColor: '#dce7e5',
-                titleFont: { size: 12, weight: '600' },
-                bodyFont: { size: 11 },
-                callbacks: {
-                  title: items => items.length ? items[0].label : '',
-                  label: item => `${metric.label}: ${Number(item.parsed.x || 0).toLocaleString()}`
-                }
-              }
-            },
-            scales: {
-              x: { ticks: { callback: value => Number(value).toLocaleString() } }
-            }
-          }
-        });
-      }
-    }
-    if (ctxDoughnut && data.totals) {
-      if(chartInstances.doughnut) chartInstances.doughnut.destroy();
-      const total = (data.totals.confirmed || 0) + (data.totals.suspected || 0) + (data.totals.probable || 0);
-      chartInstances.doughnut = new Chart(ctxDoughnut.getContext('2d'), {
-        type: 'doughnut',
-        data: { labels: ['Confirmed', 'Suspected', 'Probable'], datasets: [{ data: [data.totals.confirmed || 0, data.totals.suspected || 0, data.totals.probable || 0], backgroundColor: [colors.teal, colors.yellow, colors.blue], borderWidth: 0 }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false, cutout: '62%', layout: { padding: 0 },
-          plugins: {
-            tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw.toLocaleString()} (${total > 0 ? ((c.raw / total) * 100).toFixed(1) : 0}%)` } },
-            legend: {
-              position: 'right', align: 'center',
-              labels: {
-                boxWidth: 10, boxHeight: 10, padding: 8, color: '#fff', font: { size: 11, weight: '600' },
-                generateLabels: chart => chart.data.labels.map((l, i) => ({ text: `${l}: ${total > 0 ? ((chart.data.datasets[0].data[i] / total) * 100).toFixed(1) : 0}%`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: chart.data.datasets[0].backgroundColor[i], lineWidth: 0, hidden: false, index: i, fontColor: '#fff' }))
-              }
-            }
-          }
-        }
-      });
-    }
+    window.renderDashboardCharts?.(data);
   }
 
   function parseDailyHistoryCsv(text, valueColumn) {
@@ -1254,6 +1084,8 @@
   }
 
   function renderDashboardView(data, sourceData = data) {
+    document.getElementById("hdr-total").textContent = ((Number(data.totals.confirmed) || 0) + (Number(data.totals.suspected) || 0) + (Number(data.totals.probable) || 0)).toLocaleString();
+    document.getElementById("resetCountrySelection").setAttribute('aria-pressed', String(!data.geographyFilter?.country && !data.geographyFilter?.province));
     document.getElementById("hdr-confirmed").innerText = (data.totals.confirmed || 0).toLocaleString();
     document.getElementById("hdr-suspected").innerText = (data.totals.suspected || 0).toLocaleString();
     document.getElementById("hdr-deaths").innerText = (data.totals.deaths || 0).toLocaleString();
@@ -1577,6 +1409,11 @@
     document.getElementById("provinceFilter").value = "";
     populateGeographyFilters(currentDashboardData || {});
     renderFilteredDashboard();
+  });
+  document.getElementById('resetCountrySelection').addEventListener('click', () => {
+    document.getElementById('countryFilter').value = '';
+    document.getElementById('info-panel').style.display = 'none';
+    document.getElementById('countryFilter').dispatchEvent(new Event('change', { bubbles: true }));
   });
   document.getElementById("provinceFilter").addEventListener("change", renderFilteredDashboard);
   document.getElementById("refreshNow").addEventListener("click", () => loadData({ force: true }));
