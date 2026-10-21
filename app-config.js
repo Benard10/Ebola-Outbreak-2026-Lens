@@ -18,7 +18,7 @@
     // Rollout fallback. Once the current backend is deployed, its source
     // registry overrides these values automatically.
     sources: {
-      mapStyle: "https://tiles.openfreemap.org/styles/dark?v=20261006",
+      mapStyle: "https://tiles.openfreemap.org/styles/positron",
       boundaryManifest: "data/gis/world/manifest.json?v=20261007",
       dailyHistory: {
         confirmed: "https://raw.githubusercontent.com/INRB-UMIE/BDBV2026-Data/main/data/insp_sitrep/processed/insp_sitrep__national_cumulative_confirmed_cases__daily.csv",
