@@ -155,3 +155,17 @@
     .refresh-controls { justify-content: flex-end; }
     .last-sync { margin-right: auto; }
   }
+
+.geography-selection { flex-shrink: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 6px 14px; background: var(--panel-bg); border-bottom: 1px solid var(--border); font-size: 12px; }
+.geography-selection .selection-hint { color: var(--text-muted, #8493a5); }
+.geography-selection [hidden] { display: none; }
+
+@media (max-width: 600px), (max-height: 500px) {
+  .geography-selection { gap: 6px; padding: 1px 6px; font-size: 9px; min-height: 18px; }
+  .geography-selection .selection-hint { display: none; }
+  .geography-selection .refresh-btn { padding: 0 4px; min-height: 16px; font-size: 9px; }
+}
+
+@media (max-width: 600px), (max-height: 500px) { body .dashboard-grid { row-gap: 2px; } }
+
+@media (max-height: 500px) { body .dashboard-grid { padding-top: 2px; padding-bottom: 2px; } }

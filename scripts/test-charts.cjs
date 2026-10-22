@@ -70,6 +70,40 @@ const server = http.createServer((req, res) => {
         populateGeographyFilters(currentDashboardData);
         renderDashboardView(currentDashboardData, currentDashboardData);
       });
+      const countrySelection = await page.evaluate(() => {
+        const renders = [];
+        renderMapData = async data => { renders.push(data === currentDashboardData); };
+        selectMapCountry({ country: 'Uganda' });
+        const first = { country: document.getElementById('countryFilter').value, total: document.getElementById('hdr-total').textContent };
+        selectMapCountry({ country: 'Kenya' });
+        const next = { country: document.getElementById('countryFilter').value, total: document.getElementById('hdr-total').textContent };
+        selectMapCountry({ country: 'Kenya' });
+        const cleared = { country: document.getElementById('countryFilter').value, total: document.getElementById('hdr-total').textContent };
+        selectMapCountry({ country: 'Uganda' });
+        document.getElementById('clearGeographySelection').click();
+        return { first, next, cleared, reset: document.getElementById('countryFilter').value, renders };
+      });
+      assert.equal(countrySelection.first.country, 'Uganda');
+      assert.equal(countrySelection.next.country, 'Kenya');
+      assert.notEqual(countrySelection.first.total, countrySelection.next.total);
+      assert.equal(countrySelection.cleared.country, '');
+      assert.equal(countrySelection.cleared.total, '160');
+      assert.equal(countrySelection.reset, '');
+      assert.ok(countrySelection.renders.length >= 5 && countrySelection.renders.every(Boolean), 'Every selection must retain full map data');
+      for (const closeWith of ['button', 'escape']) {
+        await page.evaluate(() => {
+          selectMapCountry({ country: 'Uganda' });
+          showInfoPanel({ name: 'Uganda', country: 'Uganda', confirmed: 120 });
+        });
+        assert.equal(await page.locator('#countryFilter').inputValue(), 'Uganda');
+        if (closeWith === 'button') await page.getByRole('button', { name: 'Close location details' }).click();
+        else await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#countryFilter').inputValue(), '');
+        assert.equal(await page.locator('#provinceFilter').inputValue(), '');
+        assert.equal(await page.locator('#hdr-total').textContent(), '160');
+        assert.equal(await page.locator('#selectionStatus').textContent(), 'Viewing: All countries');
+        assert.equal(await page.locator('#info-panel').isVisible(), false);
+      }
       const reportingDates = await page.evaluate(async () => {
         confirmBackend = async () => ({ version: 'date-fixture', dataRevision: '1' });
         loadDailyHistory = async () => [];

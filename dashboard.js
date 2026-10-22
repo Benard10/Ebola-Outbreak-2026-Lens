@@ -227,7 +227,7 @@
         map.once("load", () => {
           map.on("zoomend", () => {
             const selector = document.getElementById("adminLevel");
-            if (selector && selector.value === "auto" && currentDashboardData) renderAdminDetailLayer(getFilteredDashboardData(currentDashboardData));
+            if (selector && selector.value === "auto" && currentDashboardData) renderAdminDetailLayer(currentDashboardData);
           });
           resolve(true);
         });
@@ -571,15 +571,37 @@
       (iso && resolveCountryIso(option.value) === iso)
     ));
     if (!option) return;
-    select.value = option.value;
+    select.value = select.value === option.value ? '' : option.value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  function updateCountrySelection() {
+    const country = document.getElementById('countryFilter').value;
+    const iso = resolveCountryIso(country);
+    const province = document.getElementById('provinceFilter').value;
+    document.getElementById('selectionStatus').textContent = `Viewing: ${province || country || 'All countries'}`;
+    document.getElementById('clearGeographySelection').hidden = !country && !province;
+    if (!map || !map.isStyleLoaded()) return;
+    renderedCountryCodes.forEach(code => {
+      const slug = code.toLowerCase();
+      const selected = !!iso && code === iso;
+      if (map.getLayer(`cases-fill-${slug}`)) map.setPaintProperty(`cases-fill-${slug}`, 'fill-opacity', !iso || selected ? 0.72 : 0.4);
+      if (map.getLayer(`cases-line-${slug}`)) {
+        map.setPaintProperty(`cases-line-${slug}`, 'line-width', selected ? 4 : 2.2);
+        map.setPaintProperty(`cases-line-${slug}`, 'line-color', selected ? '#ffffff' : riskColorExpression(activeMapMetric().field));
+      }
+    });
+  }
+
+  const handledBoundaryClicks = new WeakSet();
   function bindBoundaryInteraction(layerId) {
     map.on("click", layerId, event => {
+      if (event.originalEvent && handledBoundaryClicks.has(event.originalEvent)) return;
+      if (event.originalEvent) handledBoundaryClicks.add(event.originalEvent);
       const item = mapFeatureProperties(event.features[0].properties);
       selectMapCountry(item);
-      showInfoPanel(item);
+      if (document.getElementById('countryFilter').value) showInfoPanel(item);
+      else document.getElementById('info-panel').style.display = 'none';
     });
     map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", layerId, () => {
@@ -870,7 +892,7 @@
     const view = getFilteredDashboardData(currentDashboardData);
     renderDashboardView(view, currentDashboardData);
     const manifestPromise = loadBoundaryManifest().catch(() => null);
-    void renderMapData(view, manifestPromise, ensureMap());
+    void renderMapData(currentDashboardData, manifestPromise, ensureMap());
   }
 
   function geographicRanking(data) {
@@ -1095,6 +1117,7 @@
     const recRate = data.totals.confirmed > 0 ? ((data.totals.recovered / data.totals.confirmed) * 100).toFixed(1) : 0;
     document.getElementById("risk-cfr").innerText = cfr + "%";
     document.getElementById("risk-recovery").innerText = recRate + "%";
+    updateCountrySelection();
     renderCharts(data);
     document.getElementById("dataSource").textContent = sourceData.totals.source
       ? `Source: ${sourceData.totals.source}`
@@ -1206,6 +1229,7 @@
         await renderBoundaryLayer(latestData);
         await renderMap(latestData.map?.points || latestData.zones);
         flushCountryBoundaries();
+        updateCountrySelection();
         applyMapMode();
       }
     } catch (err) {
@@ -1234,7 +1258,7 @@
       console.error("Boundary manifest failed:", err);
       return null;
     });
-    if (currentDashboardData) void renderMapData(getFilteredDashboardData(currentDashboardData), manifestPromise, mapPromise);
+    if (currentDashboardData) void renderMapData(currentDashboardData, manifestPromise, mapPromise);
     let dataLoaded = false;
     try {
       const mode = document.getElementById("dataModeBadge");
@@ -1270,7 +1294,7 @@
       mode.className = "status-badge live";
       // Map geometry is substantially heavier than the statistics payload. It
       // continues in the background and never blocks refresh controls/charts.
-      void renderMapData(getFilteredDashboardData(data), manifestPromise, mapPromise);
+      void renderMapData(data, manifestPromise, mapPromise);
       // Historical daily reports enrich the curve independently and do not
       // delay headline figures, controls, or map startup.
       void loadDailyHistory(forceRefresh).then(history => {
@@ -1399,16 +1423,20 @@
   document.querySelectorAll("[data-map-mode]").forEach(btn => btn.addEventListener("click", () => setMapMode(btn.dataset.mapMode)));
   document.getElementById("adminLevel").addEventListener("change", () => {
     renderedAdminLevel = -1;
-    if (currentDashboardData) renderAdminDetailLayer(getFilteredDashboardData(currentDashboardData), true);
+    if (currentDashboardData) renderAdminDetailLayer(currentDashboardData, true);
   });
   document.getElementById("mapMetric").addEventListener("change", () => {
     applyMapMetricStyling();
+    updateCountrySelection();
     if (currentDashboardData) renderCharts(getFilteredDashboardData(currentDashboardData));
   });
   document.getElementById("countryFilter").addEventListener("change", () => {
     document.getElementById("provinceFilter").value = "";
     populateGeographyFilters(currentDashboardData || {});
     renderFilteredDashboard();
+  });
+  document.getElementById('clearGeographySelection').addEventListener('click', () => {
+    document.getElementById('resetCountrySelection').click();
   });
   document.getElementById('resetCountrySelection').addEventListener('click', () => {
     document.getElementById('countryFilter').value = '';

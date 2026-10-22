@@ -18,8 +18,11 @@
   syncFooter();
   window.addEventListener('resize', syncToolbar);
   syncToolbar();
-  const closeInfo = () => { info.style.display = 'none'; };
-  options.addEventListener('toggle', () => { if (options.open) closeInfo(); });
+  const closeInfo = () => {
+    document.getElementById('resetCountrySelection').click();
+  };
+  info.querySelector('.close-btn').addEventListener('click', closeInfo);
+  options.addEventListener('toggle', () => { if (options.open) info.style.display = 'none'; });
   const detailLabel = content.querySelector('.map-admin-label');
   detailLabel.appendChild(document.getElementById('adminLevel'));
   toolbar.querySelectorAll('[data-map-mode]').forEach(button => content.querySelector('.map-display-modes').appendChild(button));
