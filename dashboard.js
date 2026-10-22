@@ -39,7 +39,7 @@
   let subnationalLoadedAt = 0;
 
   const colors = { teal: '#54b7a6', red: '#e4605e', yellow: '#e9c46a', blue: '#4a90e2', grid: '#364146', text: '#8493a5' };
-  const mapColors = { high: '#ef4444', moderate: '#f59e0b', low: '#38bdf8', none: '#4b5563' };
+  const mapColors = { high: '#ef4444', moderate: '#f59e0b', low: '#38bdf8', none: '#ffffff' };
   const MAP_THRESHOLDS = APP_CONFIG.mapThresholds || {
     total: { moderate: 15, high: 50 }, confirmed: { moderate: 15, high: 50 },
     deaths: { moderate: 5, high: 15 }, recovered: { moderate: 10, high: 30 }

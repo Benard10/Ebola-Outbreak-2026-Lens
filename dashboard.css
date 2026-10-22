@@ -7,7 +7,7 @@
     --map-high: #ef4444;
     --map-moderate: #f59e0b;
     --map-low: #38bdf8;
-    --map-none: #4b5563;
+    --map-none: #ffffff;
     --bg-dark: #1e2326;
     --panel-bg: #2a3135;
     --text-main: #e0e6ed;
@@ -169,3 +169,5 @@
 @media (max-width: 600px), (max-height: 500px) { body .dashboard-grid { row-gap: 2px; } }
 
 @media (max-height: 500px) { body .dashboard-grid { padding-top: 2px; padding-bottom: 2px; } }
+
+.legend-color.no-cases { border: 1px solid #8493a5; }
